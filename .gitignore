@@ -78,4 +78,11 @@ dmypy.json
 .temp/
 temp/
 
+# Test data
 tests/data/
+
+# Models (large files)
+models/
+
+# Uploaded files
+data/uploads/
