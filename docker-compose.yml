@@ -1,15 +1,26 @@
 version: "3.8"
 
 services:
+  # --- Model Downloader Service ---
+  model-downloader:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile.downloader
+    container_name: ocr-model-downloader
+    volumes:
+      - ./models:/app/models
+    profiles:
+      - setup
+
   # --- Vision Model Service ---
   vision-engine:
     image: vllm/vllm-openai:latest
     container_name: ocr-vision-engine
     command: >
       --model /models/vision
-      --gpu-memory-utilization 0.4
+      --gpu-memory-utilization 0.45
       --port 8000
-      --quantization awq
+      --trust-remote-code
     volumes:
       - ./models/vision:/models/vision:ro
     deploy:
@@ -24,11 +35,6 @@ services:
     networks:
       - ocr-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # --- Text Model Service ---
   text-engine:
@@ -36,9 +42,10 @@ services:
     container_name: ocr-text-engine
     command: >
       --model /models/text
-      --gpu-memory-utilization 0.3
       --port 8001
-      --quantization awq
+      --gpu-memory-utilization 0.4
+      --trust-remote-code
+      --quantization bitsandbytes
     volumes:
       - ./models/text:/models/text:ro
     deploy:
@@ -53,11 +60,6 @@ services:
     networks:
       - ocr-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # --- Application Core ---
   app:
@@ -79,10 +81,8 @@ services:
     networks:
       - ocr-network
     depends_on:
-      vision-engine:
-        condition: service_healthy
-      text-engine:
-        condition: service_healthy
+      - vision-engine
+      - text-engine
     restart: unless-stopped
 
 networks:

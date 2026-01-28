@@ -1,0 +1,14 @@
+# Model Downloader Container
+FROM python:3.10-slim
+
+# Install dependencies
+RUN pip install --no-cache-dir huggingface-hub
+
+# Set working directory
+WORKDIR /app
+
+# Copy download script
+COPY download_models.py /app/
+
+# Set entry point
+ENTRYPOINT ["python", "download_models.py"]

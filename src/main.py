@@ -51,14 +51,36 @@ def process_image_with_vision(image_path: Path) -> str:
     response = requests.post(
         VISION_URL,
         json={
-            "model": "vision-model",
-            "messages": [{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "Transcribe the Arabic text in this image accurately."},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
-                ]
-            }]
+            "model": "/models/vision",
+            "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{img_b64}"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": "Free OCR."
+                            }
+                        ]
+                    }
+                    ],
+                    "max_tokens": 1024,
+        "temperature": 0.0,
+        "extra_body": {
+            "skip_special_tokens": False,
+            # args used to control custom logits processor
+            "vllm_xargs": {
+                "ngram_size": 30,
+                "window_size": 90,
+                # whitelist: <td>, </td>
+                "whitelist_token_ids": [128821, 128822],
+            },
+        },
         },
         timeout=120
     )
@@ -71,7 +93,7 @@ def correct_text_with_llm(raw_text: str) -> str:
     response = requests.post(
         TEXT_URL,
         json={
-            "model": "text-model",
+            "model": "/models/text",
             "messages": [{
                 "role": "user",
                 "content": f"Fix any OCR errors in this Arabic text and return only the corrected text: {raw_text}"
@@ -106,6 +128,14 @@ def worker_loop() -> None:
             # Step 2: Correct OCR errors
             corrected_text = correct_text_with_llm(raw_text)
             logger.info(f"Job {job_id}: Text correction complete")
+
+            # Step 3: Write the .md file
+            md_path = image_path.with_suffix(".md")
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write(corrected_text)
+            logger.info(f"Job {job_id}: Markdown file written to {md_path}")
+
+
 
             update_job(job_id, JobStatus.COMPLETED, raw_text, corrected_text)
             logger.info(f"Job {job_id}: Completed successfully")

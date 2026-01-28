@@ -33,18 +33,28 @@ The application provides a web-based interface for batch processing document ima
 - **Error Correction**: Two-stage pipeline for accurate text extraction
 - **GPU Optimized**: Efficient VRAM allocation for concurrent model inference
 - **Docker Ready**: Full containerization with Docker Compose
+- **Auto-Setup**: Automatic model downloading with default models
+
+## Default Models
+
+The automated setup downloads these models:
+- **Vision Model**: [deepseek-ai/DeepSeek-OCR](https://huggingface.co/deepseek-ai/DeepSeek-OCR) - Specialized OCR vision model
+- **Text Model**: [google/gemma-2-2b-it](https://huggingface.co/google/gemma-2-2b-it) - Efficient 2B parameter text correction model
+
+You can replace these with your own models by placing them in `models/vision/` and `models/text/` directories.
 
 ## Requirements
 
 ### Hardware
 - NVIDIA GPU with at least 16GB VRAM (RTX 3090/4090/5090 recommended)
 - 16GB+ System RAM
-- 50GB+ Storage for models
+- 50GB+ Storage for models (auto-download requires ~20GB)
 
 ### Software
 - Docker & Docker Compose
 - NVIDIA Container Toolkit
 - CUDA 12.0+
+- Python 3.10+ (for setup script)
 
 ## Quick Start
 
@@ -55,19 +65,54 @@ git clone https://github.com/yourusername/oman-ocr.git
 cd oman-ocr
 ```
 
-### 2. Prepare Models
+### 2. Automated Setup (Recommended)
 
-Download your vision and text models and place them in the appropriate directories:
+Run the setup script that automatically downloads models and configures the system:
+
+**Linux/Mac:**
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+**Windows:**
+```cmd
+setup.bat
+```
+
+This will:
+- Install Python dependencies
+- Download DeepSeek-OCR (vision model)
+- Download Gemma 2B (text model)
+- Create necessary directories and configuration
+
+### 3. Launch Services
+
+```bash
+docker-compose up -d
+```
+
+### 4. Access the Application
+
+Open your browser and navigate to: `http://localhost:8080`
+
+---
+
+## Manual Setup (Alternative)
+
+If you prefer to use your own models:
+
+### 1. Prepare Models
+
+Place your models in the appropriate directories:
 
 ```bash
 mkdir -p models/vision models/text
-# Place your AWQ-quantized vision model in models/vision/
-# Place your AWQ-quantized text model in models/text/
+# Place your vision model in models/vision/
+# Place your text model in models/text/
 ```
 
-### 3. Configure Environment
-
-Copy the example environment file and adjust as needed:
+### 2. Configure Environment
 
 ```bash
 cp .env.example .env
@@ -82,15 +127,11 @@ UPLOAD_DIR=/data/uploads
 DB_PATH=/data/jobs.db
 ```
 
-### 4. Launch Services
+### 3. Launch Services
 
 ```bash
 docker-compose up -d
 ```
-
-### 5. Access the Application
-
-Open your browser and navigate to: `http://localhost:8080`
 
 ## Project Structure
 
@@ -100,6 +141,10 @@ oman-ocr/
 │   ├── main.py              # Streamlit application & worker
 │   ├── database.py          # SQLite job queue operations
 │   └── requirements.txt     # Python dependencies
+├── scripts/
+│   ├── download_models.py   # Automatic model downloader
+│   ├── Dockerfile.downloader # Model downloader container
+│   └── requirements.txt     # Script dependencies
 ├── tests/
 │   ├── conftest.py          # Pytest fixtures
 │   ├── test_database.py     # Database tests
@@ -109,12 +154,14 @@ oman-ocr/
 │   ├── jobs.db              # SQLite database
 │   └── uploads/             # Uploaded images
 ├── models/
-│   ├── vision/              # Vision model weights
-│   └── text/                # Text model weights
+│   ├── vision/              # Vision model weights (auto-downloaded)
+│   └── text/                # Text model weights (auto-downloaded)
 ├── .env                     # Environment configuration
 ├── .env.example             # Environment template
 ├── Dockerfile               # App container definition
 ├── docker-compose.yml       # Service orchestration
+├── setup.sh                 # Automated setup (Linux/Mac)
+├── setup.bat                # Automated setup (Windows)
 ├── requirements-dev.txt     # Development dependencies
 ├── pytest.ini               # Pytest configuration
 ├── IMPLEMENTATION_PLAN.md   # Technical documentation
@@ -145,11 +192,13 @@ Adjust GPU memory utilization in `docker-compose.yml`:
 
 ```yaml
 vision-engine:
-  command: --gpu-memory-utilization 0.4  # 40% VRAM
+  command: --gpu-memory-utilization 0.45  # 45% VRAM
 
 text-engine:
-  command: --gpu-memory-utilization 0.3  # 30% VRAM
+  command: --gpu-memory-utilization 0.35  # 35% VRAM
 ```
+
+**Note**: The default models (DeepSeek-OCR + Gemma 2B) are optimized to fit within 16GB VRAM. If using larger models, adjust these values or use quantized versions.
 
 ### Environment Variables
 
@@ -226,6 +275,16 @@ pytest tests/test_database.py
 
 ### Common Issues
 
+**Model download fails**
+```bash
+# Manually download models
+python scripts/download_models.py
+
+# Check Hugging Face connectivity
+pip install huggingface-hub
+huggingface-cli whoami
+```
+
 **GPU not detected**
 ```bash
 # Verify NVIDIA Container Toolkit
@@ -234,11 +293,18 @@ docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
 
 **Out of VRAM**
 - Reduce `gpu-memory-utilization` values in `docker-compose.yml`
-- Use smaller quantized models (AWQ 4-bit recommended)
+- The default models should fit in 16GB VRAM
+- Consider using smaller models or quantized versions
 
 **Connection refused errors**
 - Ensure all services are running: `docker-compose ps`
-- Check service logs: `docker-compose logs -f`
+- Check service logs: `docker-compose logs -f vision-engine`
+- Wait for models to load (first start takes 2-5 minutes)
+
+**vLLM container crashes**
+- Check if models are downloaded: `ls models/vision models/text`
+- Verify model compatibility with vLLM
+- Check logs: `docker-compose logs vision-engine`
 
 ## License
 
