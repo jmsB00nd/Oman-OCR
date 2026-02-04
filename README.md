@@ -64,8 +64,14 @@ You can replace these with your own models by placing them in `models/vision/` a
 git clone https://github.com/yourusername/oman-ocr.git
 cd oman-ocr
 ```
-
-### 2. Automated Setup (Recommended)
+### 2. RUN
+```bash
+cd ~/ocr/Oman-OCR
+ls -ld data data/uploads
+chown -R 1000:1000 data
+chmod -R 755 data
+```
+### 3. Automated Setup (Recommended)
 
 Run the setup script that automatically downloads models and configures the system:
 
@@ -86,13 +92,13 @@ This will:
 - Download Gemma 2B (text model)
 - Create necessary directories and configuration
 
-### 3. Launch Services
+### 4. Launch Services
 
 ```bash
 docker-compose up -d
 ```
 
-### 4. Access the Application
+### 5. Access the Application
 
 Open your browser and navigate to: `http://localhost:8080`
 
