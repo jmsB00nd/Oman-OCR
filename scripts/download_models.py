@@ -47,7 +47,7 @@ def download_model(model_name: str, target_dir: Path) -> None:
             local_dir=str(target_dir),
             local_dir_use_symlinks=False,
             resume_download=True,
-            token="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"
+            token="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"
         )
         print(f"\n✓ Successfully downloaded {model_name}\n")
     except Exception as e:

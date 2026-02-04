@@ -1,5 +1,5 @@
 """Arabic OCR Application - Main entry point."""
-
+###
 import base64
 import logging
 import os
@@ -183,6 +183,45 @@ def render_upload_tab() -> None:
         st.rerun()
 
 
+# def render_results_tab() -> None:
+#     """Render the results and history tab."""
+#     st.header("Processing History")
+
+#     # Display statistics
+#     stats = get_job_stats()
+#     if stats:
+#         cols = st.columns(4)
+#         cols[0].metric("Pending", stats.get(JobStatus.PENDING, 0))
+#         cols[1].metric("Processing", stats.get(JobStatus.PROCESSING, 0))
+#         cols[2].metric("Completed", stats.get(JobStatus.COMPLETED, 0))
+#         cols[3].metric("Failed", len([k for k in stats if k.startswith(JobStatus.FAILED)]))
+
+#     # Refresh button
+#     if st.button("Refresh"):
+#         st.rerun()
+
+#     # Display jobs table
+#     jobs = get_all_jobs()
+#     if jobs:
+#         df = pd.DataFrame(
+#             jobs,
+#             columns=["ID", "Filename", "Status", "Raw Text", "Corrected Text", "Created At"]
+#         )
+#         st.dataframe(
+#             df,
+#             use_container_width=True,
+#             column_config={
+#                 "ID": st.column_config.TextColumn("Job ID", width="small"),
+#                 "Filename": st.column_config.TextColumn("File", width="medium"),
+#                 "Status": st.column_config.TextColumn("Status", width="small"),
+#                 "Raw Text": st.column_config.TextColumn("Raw OCR", width="large"),
+#                 "Corrected Text": st.column_config.TextColumn("Corrected", width="large"),
+#                 "Created At": st.column_config.DatetimeColumn("Created", width="medium"),
+#             }
+#         )
+#     else:
+#         st.info("No jobs in the queue. Upload some images to get started.")
+
 def render_results_tab() -> None:
     """Render the results and history tab."""
     st.header("Processing History")
@@ -196,31 +235,61 @@ def render_results_tab() -> None:
         cols[2].metric("Completed", stats.get(JobStatus.COMPLETED, 0))
         cols[3].metric("Failed", len([k for k in stats if k.startswith(JobStatus.FAILED)]))
 
-    # Refresh button
     if st.button("Refresh"):
         st.rerun()
 
-    # Display jobs table
     jobs = get_all_jobs()
-    if jobs:
-        df = pd.DataFrame(
-            jobs,
-            columns=["ID", "Filename", "Status", "Raw Text", "Corrected Text", "Created At"]
-        )
-        st.dataframe(
-            df,
-            use_container_width=True,
-            column_config={
-                "ID": st.column_config.TextColumn("Job ID", width="small"),
-                "Filename": st.column_config.TextColumn("File", width="medium"),
-                "Status": st.column_config.TextColumn("Status", width="small"),
-                "Raw Text": st.column_config.TextColumn("Raw OCR", width="large"),
-                "Corrected Text": st.column_config.TextColumn("Corrected", width="large"),
-                "Created At": st.column_config.DatetimeColumn("Created", width="medium"),
-            }
-        )
-    else:
+    if not jobs:
         st.info("No jobs in the queue. Upload some images to get started.")
+        return
+
+    df = pd.DataFrame(
+        jobs,
+        columns=["ID", "Filename", "Status", "Raw Text", "Corrected Text", "Created At"]
+    )
+
+    # Store selected job
+    if "selected_job_id" not in st.session_state:
+        st.session_state.selected_job_id = None
+
+    st.subheader("Jobs")
+
+    # Display compact table (NO long text)
+    for _, row in df.iterrows():
+        cols = st.columns([1, 3, 2, 2])
+
+        cols[0].write(row["ID"])
+        cols[1].write(row["Filename"])
+        cols[2].write(row["Status"])
+
+        if cols[3].button("View", key=f"view_{row['ID']}"):
+            st.session_state.selected_job_id = row["ID"]
+
+    # Show full OCR results
+    if st.session_state.selected_job_id is not None:
+        job = df[df["ID"] == st.session_state.selected_job_id].iloc[0]
+
+        st.divider()
+        st.subheader(f"📄 OCR Result — {job['Filename']}")
+
+        # with st.expander("🧾 Raw OCR Output", expanded=True):
+        #     st.text_area(
+        #         label="",
+        #         value=job["Raw Text"] or "",
+        #         height=300
+        #     )
+        with st.expander("✅ Raw Text", expanded=True):
+            st.markdown(job["Raw Text"] or "", unsafe_allow_html=False)
+        # with st.expander("✅ Corrected Text", expanded=True):
+        #     st.text_area(
+        #         label="",
+        #         value=job["Corrected Text"] or "",
+        #         height=300
+        #     )
+        with st.expander("✅ Corrected Text", expanded=True):
+            st.markdown(job["Corrected Text"] or "", unsafe_allow_html=False)
+
+
 
 
 def main() -> None:
