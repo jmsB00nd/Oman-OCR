@@ -61,7 +61,7 @@ You can replace these with your own models by placing them in `models/vision/` a
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/oman-ocr.git
+git clone https://github.com/imaryamsamani-lang/Arabic-Finance-Data-OCR.git
 cd oman-ocr
 ```
 ### 2. RUN
@@ -144,33 +144,33 @@ docker-compose up -d
 ```
 oman-ocr/
 ├── src/
-│   ├── main.py              # Streamlit application & worker
-│   ├── database.py          # SQLite job queue operations
-│   └── requirements.txt     # Python dependencies
+│   ├── main.py               # Streamlit application & worker
+│   ├── database.py           # SQLite job queue operations
+│   └── requirements.txt      # Python dependencies
 ├── scripts/
-│   ├── download_models.py   # Automatic model downloader
+│   ├── download_models.py    # Automatic model downloader
 │   ├── Dockerfile.downloader # Model downloader container
-│   └── requirements.txt     # Script dependencies
+│   └── requirements.txt      # Script dependencies
 ├── tests/
-│   ├── conftest.py          # Pytest fixtures
-│   ├── test_database.py     # Database tests
-│   ├── test_pipeline.py     # OCR pipeline tests
-│   └── test_worker.py       # Worker tests
+│   ├── conftest.py           # Pytest fixtures
+│   ├── test_database.py      # Database tests
+│   ├── test_pipeline.py      # OCR pipeline tests
+│   └── test_worker.py        # Worker tests
 ├── data/
-│   ├── jobs.db              # SQLite database
-│   └── uploads/             # Uploaded images
+│   ├── jobs.db               # SQLite database
+│   └── uploads/              # Uploaded images
 ├── models/
-│   ├── vision/              # Vision model weights (auto-downloaded)
-│   └── text/                # Text model weights (auto-downloaded)
-├── .env                     # Environment configuration
-├── .env.example             # Environment template
-├── Dockerfile               # App container definition
-├── docker-compose.yml       # Service orchestration
-├── setup.sh                 # Automated setup (Linux/Mac)
-├── setup.bat                # Automated setup (Windows)
-├── requirements-dev.txt     # Development dependencies
-├── pytest.ini               # Pytest configuration
-├── IMPLEMENTATION_PLAN.md   # Technical documentation
+│   ├── vision/               # Vision model weights (auto-downloaded)
+│   └── text/                 # Text model weights (auto-downloaded)
+├── .env                      # Environment configuration
+├── .env.example              # Environment template
+├── Dockerfile                # App container definition
+├── docker-compose.yml        # Service orchestration
+├── setup.sh                  # Automated setup (Linux/Mac)
+├── setup.bat                 # Automated setup (Windows)
+├── requirements-dev.txt      # Development dependencies
+├── pytest.ini                # Pytest configuration
+├── IMPLEMENTATION_PLAN.md    # Technical documentation
 └── README.md
 ```
 
