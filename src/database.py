@@ -126,3 +126,13 @@ def get_job_stats() -> dict[str, int]:
                GROUP BY status"""
         )
         return {row["status"]: row["count"] for row in cursor.fetchall()}
+    
+
+def delete_all_jobs() -> None:
+    """Delete all jobs from the database."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM jobs")
+    conn.commit()
+    conn.close()
+    logger.info("All jobs deleted from database")

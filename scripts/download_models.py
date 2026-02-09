@@ -3,6 +3,7 @@
 import os
 import sys
 from pathlib import Path
+from getpass import getpass  # For securely entering HF token
 
 try:
     from huggingface_hub import snapshot_download
@@ -32,7 +33,7 @@ def is_model_downloaded(model_dir: Path) -> bool:
     return all((model_dir / file).exists() for file in required_files)
 
 
-def download_model(model_name: str, target_dir: Path) -> None:
+def download_model(model_name: str, target_dir: Path, hf_token: str) -> None:
     """Download a model from Hugging Face Hub."""
     print(f"\n{'='*60}")
     print(f"Downloading: {model_name}")
@@ -47,7 +48,7 @@ def download_model(model_name: str, target_dir: Path) -> None:
             local_dir=str(target_dir),
             local_dir_use_symlinks=False,
             resume_download=True,
-            token="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"
+            token=hf_token
         )
         print(f"\n✓ Successfully downloaded {model_name}\n")
     except Exception as e:
@@ -61,19 +62,24 @@ def main():
     print("Arabic OCR System - Model Setup")
     print("="*60 + "\n")
 
+    # Get Hugging Face token from environment variable or user input
+    hf_token = os.environ.get("HF_TOKEN")
+    if not hf_token:
+        hf_token = getpass("Enter your Hugging Face token: ")
+
     # Check vision model
     if is_model_downloaded(VISION_DIR):
         print(f"✓ Vision model already exists at: {VISION_DIR}")
     else:
         print(f"✗ Vision model not found")
-        download_model(VISION_MODEL, VISION_DIR)
+        download_model(VISION_MODEL, VISION_DIR, hf_token)
 
-    # Check text model
+    # # Check text model
     if is_model_downloaded(TEXT_DIR):
         print(f"✓ Text model already exists at: {TEXT_DIR}")
     else:
         print(f"✗ Text model not found")
-        download_model(TEXT_MODEL, TEXT_DIR)
+        download_model(TEXT_MODEL, TEXT_DIR, hf_token)
 
     print("\n" + "="*60)
     print("Model setup complete!")
