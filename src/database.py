@@ -24,7 +24,6 @@ class JobStatus:
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
-
 @contextmanager
 def get_db_connection():
     """Context manager for database connections."""
@@ -42,7 +41,6 @@ def get_db_connection():
         raise
     finally:
         conn.close()
-
 
 def table_exists(conn, table_name: str) -> bool:
     """Check if a table exists in the database."""
@@ -87,7 +85,6 @@ def init_db() -> None:
             logger.error("Jobs table creation failed!")
             raise RuntimeError("Failed to create jobs table")
 
-
 def add_job(filename: str) -> str:
     """Add a new job to the queue."""
     init_db()  # Ensure database is initialized
@@ -101,7 +98,6 @@ def add_job(filename: str) -> str:
         )
     logger.info(f"Job {job_id} added for file: {filename}")
     return job_id
-
 
 def get_next_job() -> Optional[Tuple[str, str]]:
     """Get the next pending job from the queue."""
@@ -117,7 +113,6 @@ def get_next_job() -> Optional[Tuple[str, str]]:
         )
         row = cursor.fetchone()
         return (row["id"], row["filename"]) if row else None
-
 
 def update_job(
     job_id: str,
@@ -254,7 +249,6 @@ def clear_all_data() -> None:
     except Exception as e:
         logger.error(f"Error clearing all data: {e}")
         raise
-
 
 def get_connection():
     """Get a database connection (for backward compatibility)."""

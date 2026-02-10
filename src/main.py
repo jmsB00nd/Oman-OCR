@@ -4,7 +4,7 @@ import logging
 import streamlit as st
 from dotenv import load_dotenv
 
-from config import apply_custom_styles
+from config import apply_custom_styles, LANGUAGES
 from utils import get_text, start_worker
 from render import render_language_selector, render_upload_and_results
 from PIL import Image
@@ -50,19 +50,19 @@ def main() -> None:
     
     # Initialize database ONCE at the beginning
     if "db_initialized" not in st.session_state:
-        with st.spinner("🔄 Initializing database..."):
+        with st.spinner("Initializing database..."):
             try:
                 init_db()
                 st.session_state.db_initialized = True
                 logger.info("Database initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize database: {e}")
-                st.error(f"❌ Database initialization failed: {e}")
+                st.error(f"Database initialization failed: {e}")
                 return
     
     # Auto-clear previous data when app starts
     if "app_initialized" not in st.session_state:
-        with st.spinner("🔄 Starting fresh session..."):
+        with st.spinner("Starting fresh session..."):
             try:
                 # Clear all previous data on app start
                 clear_all_data()
@@ -74,7 +74,7 @@ def main() -> None:
                 st.session_state.app_initialized = True
 
     # Render language selector
-    render_language_selector()
+    render_language_selector(LANGUAGES)
     
     # Create enhanced header
     st.markdown("""

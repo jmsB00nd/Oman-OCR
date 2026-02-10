@@ -8,20 +8,25 @@ TEXT_URL = os.getenv("TEXT_URL", "http://localhost:8001/v1/chat/completions")
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
 WORKER_POLL_INTERVAL = 2  # seconds
 
+LANGUAGES = {
+    "en": "🇺🇸 English",
+    "ar": "🇸🇦 العربية",
+    }
+
 # Language translations
 TRANSLATIONS = {
     "en": {
-        "title": "✨ Arabic OCR System",
+        "title": "Arabic OCR System",
         "subtitle": "Extract and correct Arabic text from document images with AI-powered precision",
         "main upload": "",
-        "upload_tab": "📤 Upload & Process",
+        "upload_tab": "Upload & Process",
         "upload_header": "Upload Documents",
         "upload_description": "Upload images containing Arabic text for OCR processing.",
         "upload_placeholder": "📁 Drag and drop images here or click to browse",
         "upload_button": "🚀 Start Processing",
         "queued_success": "✅ Successfully queued {count} file(s) for processing",
         "results_header": "Processing Results",
-        "refresh_button": "🔄 Refresh Status",
+        "refresh_button": "Refresh Status",
         "clear_results": "🗑️ Clear All & Start New Session",
         "clear_confirm": "Are you sure you want to clear all previous results and start fresh?",
         "no_jobs": "No jobs in the queue. Upload some images to get started.",
@@ -44,7 +49,7 @@ TRANSLATIONS = {
         "processing_queue": "⏳ Processing Queue",
         "view_results": "👁️ View Results",
         "current_session": "📋 Current Session Results",
-        "new_session": "🆕 New Session Started",
+        "new_session": "New Session Started",
         "stats_header": "📈 Processing Statistics",
         "upload_instructions": "Supported formats: PNG, JPG, JPEG, TIFF, BMP",
         "ai_powered": "Post Processed Text",
@@ -67,17 +72,17 @@ TRANSLATIONS = {
         "w_l_c": "Word-level Changes"
     },
     "ar": {
-        "title": "✨ نظام التعرف الضوئي للعربية",
+        "title": "نظام التعرف الضوئي للعربية",
         "subtitle": "استخراج وتصحيح النصوص العربية من صور المستندات بدقة الذكاء الاصطناعي",
         "main upload": "",
-        "upload_tab": "📤 الرفع والمعالجة",
+        "upload_tab": "الرفع والمعالجة",
         "upload_header": "رفع المستندات",
         "upload_description": "ارفع الصور التي تحتوي على نصوص عربية لمعالجتها.",
         "upload_placeholder": "📁 اسحب وأفلت الصور هنا أو اضغط للتصفح",
         "upload_button": "🚀 بدء المعالجة",
         "queued_success": "✅ تم بنجاح إضافة {count} ملف إلى قائمة الانتظار",
         "results_header": "نتائج المعالجة",
-        "refresh_button": "🔄 تحديث الحالة",
+        "refresh_button": "تحديث الحالة",
         "clear_results": "🗑️ مسح الكل وبدء جلسة جديدة",
         "clear_confirm": "هل أنت متأكد من رغبتك في مسح جميع النتائج والبدء من جديد؟",
         "no_jobs": "قائمة الانتظار فارغة. ارفع بعض الصور للبدء.",
@@ -100,7 +105,7 @@ TRANSLATIONS = {
         "processing_queue": "⏳ قائمة الانتظار",
         "view_results": "👁️ عرض النتائج",
         "current_session": "📋 نتائج الجلسة الحالية",
-        "new_session": "🆕 بدأت جلسة جديدة",
+        "new_session": "بدأت جلسة جديدة",
         "stats_header": "📈 إحصائيات المعالجة",
         "upload_instructions": "الصيغ المدعومة: PNG, JPG, JPEG, TIFF, BMP",
         "ai_powered": "النص بعد المعالجة الذكية",

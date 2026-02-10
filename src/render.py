@@ -17,16 +17,11 @@ from database import (
     get_all_jobs,
 )
 
-def render_language_selector() -> None:
+def render_language_selector(LANGUAGES) -> None:
     """Render floating language selector."""
 
     if "lang" not in st.session_state:
         st.session_state.lang = "en"
-    
-    LANGUAGES = {
-    "en": "🇺🇸 English",
-    "ar": "🇸🇦 للعربية",
-    }
 
     col1, col2, col3 = st.columns([8, 1, 1])
     with col3:  # top-right corner
