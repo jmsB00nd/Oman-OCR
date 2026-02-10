@@ -267,63 +267,75 @@ def render_upload_and_results() -> None:
             st.session_state.selected_image = 0
         
         # NEW: Create THREE columns instead of two
-        left_col, middle_col, right_col = st.columns([0.8, 1.2, 1.2])
-        
+        left_col, middle_col, right_col = st.columns([0.8, 1.2, 1.2])    
+
         with left_col:
+    
+            # FIXED: Create a list of image names for selection
+            image_names = [f"📄 {job[1]}" for job in completed_jobs]
+    
+            # Display the selection (you can use radio, selectbox, or tabs)
+            selected_tab = st.radio(
+            "Select Image",
+            options=image_names,
+            index=st.session_state.selected_image,
+            key="image_selector",
+            label_visibility="collapsed"
+            )
+    
+            # Update selected_image based on selection
+            selected_idx = image_names.index(selected_tab)
+            if selected_idx != st.session_state.selected_image:
+                st.session_state.selected_image = selected_idx
+                st.rerun()
+    
+            # Display the selected image
+            job = completed_jobs[selected_idx]
+            filename = job[1]
+            image_path = UPLOAD_DIR / filename
+    
+            if image_path.exists():
+                try:
+                    # Display image with enhanced styling
+                    image = Image.open(image_path)
             
-            image_tabs = st.tabs([f"📄 {job[1]}" for job in completed_jobs])
-            
-            for idx, (tab, job) in enumerate(zip(image_tabs, completed_jobs)):
-                with tab:
-                    filename = job[1]
-                    image_path = UPLOAD_DIR / filename
-                    
-                    if image_path.exists():
-                        try:
-                            # Display image with enhanced styling
-                            image = Image.open(image_path)
-                            
-                            # Calculate display size
-                            max_width = 350
-                            if image.width > max_width:
-                                ratio = max_width / image.width
-                                display_width = max_width
-                                display_height = int(image.height * ratio)
-                            else:
-                                display_width = image.width
-                                display_height = image.height
-                            
-                            # Display image with custom styling
-                            st.markdown("<div class='image-preview'>", unsafe_allow_html=True)
-                            st.image(
-                                image, 
-                                width=display_width,
-                                use_container_width=False,
-                                caption=""
-                            )
-                            st.markdown("</div>", unsafe_allow_html=True)
-                            
-                            # When this tab is active, update the selected image index
-                            if tab._active:
-                                st.session_state.selected_image = idx
-                            
-                            # Show file info with icons
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown(f"**{get_text('file')}:**<br>{filename}", 
-                                          unsafe_allow_html=True)
-                            with col2:
-                                st.markdown(f"**{get_text('created')}:**<br>{job[5]}", 
-                                          unsafe_allow_html=True)
-                            
-                            # Status badge
-                            st.markdown(f"**{get_text('status')}:**<br><span class='status-completed'>{get_text('completed')}</span>", 
-                                      unsafe_allow_html=True)
-                                
-                        except Exception as e:
-                            st.error(f"Error loading image: {str(e)}")
+                    # Calculate display size
+                    max_width = 350
+                    if image.width > max_width:
+                        ratio = max_width / image.width
+                        display_width = max_width
+                        display_height = int(image.height * ratio)
                     else:
-                        st.warning(f"Image file not found: {filename}")
+                        display_width = image.width
+                        display_height = image.height
+            
+                    # Display image with custom styling
+                    st.markdown("<div class='image-preview'>", unsafe_allow_html=True)
+                    st.image(
+                    image, 
+                    width=display_width,
+                    use_container_width=False,
+                    caption=""
+                    )
+                    st.markdown("</div>", unsafe_allow_html=True)
+            
+                    # Show file info with icons
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**{get_text('file')}:**<br>{filename}", 
+                          unsafe_allow_html=True)
+                    with col2:
+                        st.markdown(f"**{get_text('created')}:**<br>{job[5]}", 
+                          unsafe_allow_html=True)
+            
+                    # Status badge
+                    st.markdown(f"**{get_text('status')}:**<br><span class='status-completed'>{get_text('completed')}</span>", 
+                      unsafe_allow_html=True)
+                
+                except Exception as e:
+                    st.error(f"Error loading image: {str(e)}")
+            else:
+                st.warning(f"Image file not found: {filename}")
             st.markdown("</div>", unsafe_allow_html=True)
         
         with middle_col:

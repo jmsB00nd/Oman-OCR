@@ -51,7 +51,6 @@ def table_exists(conn, table_name: str) -> bool:
     """, (table_name,))
     return cursor.fetchone() is not None
 
-
 def init_db() -> None:
     """Initialize the database schema."""
     logger.info("Initializing database...")

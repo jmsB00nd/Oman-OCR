@@ -125,11 +125,11 @@ def worker_loop() -> None:
             image_path = UPLOAD_DIR / filename
 
             # Step 1: Extract text from image
-            raw_text = "567 raw text" #process_image_with_vision(image_path)
+            raw_text = process_image_with_vision(image_path)
             logger.info(f"Job {job_id}: Vision extraction complete")
 
             # Step 2: Correct OCR errors
-            corrected_text = "78 corrected text" #correct_text_with_llm(raw_text)
+            corrected_text = correct_text_with_llm(raw_text)
             logger.info(f"Job {job_id}: Text correction complete")
 
             # Step 3: Write the .md file
