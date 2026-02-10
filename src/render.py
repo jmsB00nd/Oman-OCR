@@ -201,12 +201,6 @@ def render_upload_and_results() -> None:
             #if st.checkbox("✅ Confirm clear all data"):
             st.session_state.clear_data_on_upload = True
             st.rerun()
-
-    # Custom upload area
-    # st.markdown(f"""
-    # <div class="custom-card">
-    #     <h4 style="color: #28a745;">{get_text("selected_files")}</h4>
-    # """.format(len(files)), unsafe_allow_html=True)
         
     for i, file in enumerate(files, 1):
         st.write(f"{i}. **{file.name}** ({file.size / 1024:.1f} KB)")
@@ -222,19 +216,18 @@ def render_upload_and_results() -> None:
                         clear_previous_data()
                         st.session_state.first_upload = False
                 
-                with st.spinner("📤 Uploading and queuing files..."):
-                    queued_count = 0
-                    for file in files:
-                        file_path = UPLOAD_DIR / file.name
-                        with open(file_path, "wb") as f:
-                            f.write(file.read())
-                        add_job(file.name)
-                        queued_count += 1
+                #with st.spinner("📤 Uploading and queuing files..."):
+                queued_count = 0
+                for file in files:
+                    file_path = UPLOAD_DIR / file.name
+                    with open(file_path, "wb") as f:
+                        f.write(file.read())
+                    add_job(file.name)
+                    queued_count += 1
 
-                    st.success(get_text("queued_success").format(count=queued_count))
-                    st.balloons()
-                    time.sleep(1)
-                    st.rerun()
+                st.success(get_text("queued_success").format(count=queued_count))
+                time.sleep(2)
+                st.rerun()
     
     st.markdown("---")
     
@@ -262,8 +255,8 @@ def render_upload_and_results() -> None:
     render_statistics(jobs)
     
     # Refresh button
-    if st.button(get_text("refresh_button"), use_container_width=True):
-        st.rerun()
+    # if st.button(get_text("refresh_button"), use_container_width=True):
+    #     st.rerun()
     
     completed_jobs = [job for job in jobs if job[2] == JobStatus.COMPLETED]
     pending_jobs = [job for job in jobs if job[2] in [JobStatus.PENDING, JobStatus.PROCESSING]]
@@ -322,14 +315,14 @@ def render_upload_and_results() -> None:
                             # Show file info with icons
                             col1, col2 = st.columns(2)
                             with col1:
-                                st.markdown(f"**📄 {get_text('file')}:**<br>{filename}", 
+                                st.markdown(f"**{get_text('file')}:**<br>{filename}", 
                                           unsafe_allow_html=True)
                             with col2:
-                                st.markdown(f"**📅 {get_text('created')}:**<br>{job[5]}", 
+                                st.markdown(f"**{get_text('created')}:**<br>{job[5]}", 
                                           unsafe_allow_html=True)
                             
                             # Status badge
-                            st.markdown(f"**📊 {get_text('status')}:**<br><span class='status-completed'>{get_text('completed')}</span>", 
+                            st.markdown(f"**{get_text('status')}:**<br><span class='status-completed'>{get_text('completed')}</span>", 
                                       unsafe_allow_html=True)
                                 
                         except Exception as e:
@@ -391,14 +384,17 @@ def render_upload_and_results() -> None:
                             st.progress(similarity / 100, f"Similarity: {similarity:.1f}%")
                     
                     # Download button for raw text
-                    st.download_button(
+                    col1, col2, col3 = st.columns([1, 1, 1])
+                    
+                    with col2:
+                        st.download_button(
                         label=get_text("download_raw"),
                         data=raw_text,
                         file_name=f"{job[1].split('.')[0]}_raw.txt",
                         mime="text/plain",
                         key=f"download_raw_{job[0]}",
                         use_container_width=True
-                    )
+                        )
                 else:
                     st.warning("No raw text available")
             st.markdown("</div>", unsafe_allow_html=True)
@@ -438,8 +434,10 @@ def render_upload_and_results() -> None:
                         </div>
                         """, unsafe_allow_html=True)
                         
+                        st.markdown("---")
+
                         # Download button with enhanced styling
-                        col1, col2 = st.columns([3, 1])
+                        col1, col2, col3 = st.columns([1, 1, 1])
                         with col2:
                             st.download_button(
                                 label=get_text("download_text"),
@@ -558,8 +556,8 @@ def render_upload_and_results() -> None:
                         if word_diffs:
                             with st.expander(f"📝 Word-level Changes ({len(word_diffs)})"):
                                 for diff in word_diffs[:10]:  # Show first 10 to avoid clutter
-                                    st.write(f"**Position {diff['position']}:**")
-                                    st.write(f"  Raw: `{diff['raw']}` → Corrected: `{diff['corrected']}` ({diff['type']})")
+                                    st.write(f"**{get_text("position")} {diff['position']}:**")
+                                    st.write(f"  {get_text("raw")}: `{diff['raw']}` → {get_text("corrected")}: `{diff['corrected']}` ({diff['type']})")
                                 
                                 if len(word_diffs) > 10:
                                     st.write(f"... and {len(word_diffs) - 10} more changes")
@@ -584,27 +582,30 @@ def render_upload_and_results() -> None:
                         """
                         
                         for diff in word_diffs:
-                            comparison_report += f"\nPosition {diff['position']}: '{diff['raw']}' → '{diff['corrected']}' ({diff['type']})"
+                            comparison_report += f"\n{get_text("position")} {diff['position']}: '{diff['raw']}' → '{diff['corrected']}' ({diff['type']})"
                         
                         comparison_report += f"""
                         
-                        RAW TEXT
+                        {get_text("RAW TEXT")}
                         --------
                         {raw_text}
                         
-                        CORRECTED TEXT
+                        {get_text("CORRECTED TEXT")}
                         --------------
                         {corrected_text}
                         """
                         
-                        st.download_button(
+                        col1, col2, col3 = st.columns([1, 1, 1])
+                        
+                        with col2:
+                            st.download_button(
                             label=get_text("download_report"),
                             data=comparison_report,
                             file_name=f"{job[1].split('.')[0]}_comparison.txt",
                             mime="text/plain",
                             key=f"comparison_{job[0]}",
                             use_container_width=True
-                        )
+                            )
                         
                     else:
                         st.warning("Both raw and corrected text are required for comparison")

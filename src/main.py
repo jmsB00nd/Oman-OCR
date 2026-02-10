@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from config import apply_custom_styles
 from utils import get_text, start_worker
 from render import render_language_selector, render_upload_and_results
+from PIL import Image
 
 from database import (
     init_db,
@@ -26,7 +27,7 @@ def main() -> None:
     """Main application entry point."""
     st.set_page_config(
         page_title="Arabic OCR System",
-        page_icon="📝",
+        page_icon=Image.open("logo.jpg"),
         layout="wide",
         initial_sidebar_state="collapsed"
     )
