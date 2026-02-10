@@ -80,15 +80,9 @@ Create a Hugging Face access token and store it as an environment variable:
 
 Go to Hugging Face → Settings → Access Tokens
 
-Click New token
-
-Select Read access
-
-Copy the generated token
-
 #### Step 2: Export the Token as an Environment Variable
 
-macOS / Linux (bash or zsh):
+**macOS / Linux:**
 
 ```bash
 export HF_TOKEN="your_huggingface_token_here"
@@ -96,7 +90,7 @@ export HF_TOKEN="your_huggingface_token_here"
 
 To make it persistent, add the line above to your ~/.bashrc, ~/.zshrc, or ~/.profile.
 
-Windows (PowerShell):
+**Windows:**
 
 ```bash
 setx HF_TOKEN "your_huggingface_token_here"
