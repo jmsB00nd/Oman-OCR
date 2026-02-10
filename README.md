@@ -82,7 +82,7 @@ Go to Hugging Face → Settings → Access Tokens
 
 #### Step 2: Export the Token as an Environment Variable
 
-**macOS / Linux:**
+**Linux/Mac:**
 
 ```bash
 export HF_TOKEN="your_huggingface_token_here"
