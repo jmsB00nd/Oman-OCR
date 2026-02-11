@@ -343,6 +343,10 @@ docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
 - Verify model compatibility with vLLM
 - Check logs: `docker-compose logs vision-engine`
 
+## Demo
+
+![Demo GIF](demo/demo.gif)
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
