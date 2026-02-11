@@ -58,20 +58,51 @@ You can replace these with your own models by placing them in `models/vision/` a
 
 ## Quick Start
 
-### 1. Clone the Repository
+### Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/oman-ocr.git
+git clone https://github.com/hosseinmohammadiibusiness-cyber/Oman-OCR.git
 cd oman-ocr
 ```
-### 2. RUN
+### RUN
 ```bash
 cd ~/ocr/Oman-OCR
 ls -ld data data/uploads
 chown -R 1000:1000 data
 chmod -R 755 data
 ```
-### 3. Automated Setup (Recommended)
+
+### Access Token
+
+Create a Hugging Face access token and store it as an environment variable:
+
+#### Step 1: Create a Hugging Face Token
+
+Go to Hugging Face → Settings → Access Tokens
+
+#### Step 2: Export the Token as an Environment Variable
+
+**Linux/Mac:**
+
+```bash
+export HF_TOKEN="your_huggingface_token_here"
+```
+
+To make it persistent, add the line above to your ~/.bashrc, ~/.zshrc, or ~/.profile.
+
+**Windows:**
+
+```bash
+setx HF_TOKEN "your_huggingface_token_here"
+```
+
+Restart your terminal after running this command.
+
+#### Step 4: Accept the Model License
+
+Visit [gemma](https://huggingface.co/google/gemma-3-4b-it) and accept the repository’s terms and license to enable access.
+
+### Automated Setup (Recommended)
 
 Run the setup script that automatically downloads models and configures the system:
 
@@ -92,13 +123,13 @@ This will:
 - Download Gemma 2B (text model)
 - Create necessary directories and configuration
 
-### 4. Launch Services
+### Launch Services
 
 ```bash
 docker-compose up -d
 ```
 
-### 5. Access the Application
+### Access the Application
 
 Open your browser and navigate to: `http://localhost:8080`
 
@@ -108,7 +139,7 @@ Open your browser and navigate to: `http://localhost:8080`
 
 If you prefer to use your own models:
 
-### 1. Prepare Models
+### Prepare Models
 
 Place your models in the appropriate directories:
 
@@ -118,7 +149,7 @@ mkdir -p models/vision models/text
 # Place your text model in models/text/
 ```
 
-### 2. Configure Environment
+### Configure Environment
 
 ```bash
 cp .env.example .env
@@ -133,7 +164,7 @@ UPLOAD_DIR=/data/uploads
 DB_PATH=/data/jobs.db
 ```
 
-### 3. Launch Services
+### Launch Services
 
 ```bash
 docker-compose up -d
@@ -144,33 +175,33 @@ docker-compose up -d
 ```
 oman-ocr/
 ├── src/
-│   ├── main.py              # Streamlit application & worker
-│   ├── database.py          # SQLite job queue operations
-│   └── requirements.txt     # Python dependencies
+│   ├── main.py               # Streamlit application & worker
+│   ├── database.py           # SQLite job queue operations
+│   └── requirements.txt      # Python dependencies
 ├── scripts/
-│   ├── download_models.py   # Automatic model downloader
+│   ├── download_models.py    # Automatic model downloader
 │   ├── Dockerfile.downloader # Model downloader container
-│   └── requirements.txt     # Script dependencies
+│   └── requirements.txt      # Script dependencies
 ├── tests/
-│   ├── conftest.py          # Pytest fixtures
-│   ├── test_database.py     # Database tests
-│   ├── test_pipeline.py     # OCR pipeline tests
-│   └── test_worker.py       # Worker tests
+│   ├── conftest.py           # Pytest fixtures
+│   ├── test_database.py      # Database tests
+│   ├── test_pipeline.py      # OCR pipeline tests
+│   └── test_worker.py        # Worker tests
 ├── data/
-│   ├── jobs.db              # SQLite database
-│   └── uploads/             # Uploaded images
+│   ├── jobs.db               # SQLite database
+│   └── uploads/              # Uploaded images
 ├── models/
-│   ├── vision/              # Vision model weights (auto-downloaded)
-│   └── text/                # Text model weights (auto-downloaded)
-├── .env                     # Environment configuration
-├── .env.example             # Environment template
-├── Dockerfile               # App container definition
-├── docker-compose.yml       # Service orchestration
-├── setup.sh                 # Automated setup (Linux/Mac)
-├── setup.bat                # Automated setup (Windows)
-├── requirements-dev.txt     # Development dependencies
-├── pytest.ini               # Pytest configuration
-├── IMPLEMENTATION_PLAN.md   # Technical documentation
+│   ├── vision/               # Vision model weights (auto-downloaded)
+│   └── text/                 # Text model weights (auto-downloaded)
+├── .env                      # Environment configuration
+├── .env.example              # Environment template
+├── Dockerfile                # App container definition
+├── docker-compose.yml        # Service orchestration
+├── setup.sh                  # Automated setup (Linux/Mac)
+├── setup.bat                 # Automated setup (Windows)
+├── requirements-dev.txt      # Development dependencies
+├── pytest.ini                # Pytest configuration
+├── IMPLEMENTATION_PLAN.md    # Technical documentation
 └── README.md
 ```
 
@@ -311,6 +342,10 @@ docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
 - Check if models are downloaded: `ls models/vision models/text`
 - Verify model compatibility with vLLM
 - Check logs: `docker-compose logs vision-engine`
+
+## Demo
+
+![Demo GIF](demo/demo.gif)
 
 ## License
 
