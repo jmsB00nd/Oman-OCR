@@ -9,12 +9,19 @@ from datetime import datetime
 from typing import Optional, List, Tuple, Dict, Any
 
 from dotenv import load_dotenv
+from pathlib import Path
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 DB_PATH = os.getenv("DB_PATH", "./data/jobs.db")
+
+if not os.path.isabs(DB_PATH):
+    BASE_DIR = Path(__file__).resolve().parent
+    DB_PATH = str(BASE_DIR / DB_PATH)
+else:
+    DB_PATH = os.path.abspath(DB_PATH)
 
 
 class JobStatus:
@@ -253,7 +260,6 @@ def get_connection():
     """Get a database connection (for backward compatibility)."""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     return sqlite3.connect(DB_PATH)
-
 
 def reset_database() -> None:
     """Completely reset the database (drop and recreate)."""
