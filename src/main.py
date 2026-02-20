@@ -1,94 +1,1374 @@
+# """Arabic OCR Application - Main entry point."""
+# ###
+# import base64
+# import difflib
+# import logging
+# import os
+# import subprocess
+# import sys
+# import threading
+# import time
+# from pathlib import Path
+
+# import pandas as pd
+# import requests
+# import streamlit as st
+# from dotenv import load_dotenv
+
+# from database import (
+#     JobStatus,
+#     add_job,
+#     clear_db,
+#     get_all_jobs,
+#     get_job_stats,
+#     get_next_job,
+#     init_db,
+#     update_job,
+# )
+
+# # Configuration
+# load_dotenv()
+
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+# )
+# logger = logging.getLogger(__name__)
+
+# VISION_URL = os.getenv("VISION_URL", "http://localhost:8000/v1/chat/completions")
+# TEXT_URL = os.getenv("TEXT_URL", "http://localhost:8001/v1/chat/completions")
+# UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
+# WORKER_POLL_INTERVAL = 2  # seconds
+
+# # Ensure upload directory exists
+# UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# # Initialize database
+# init_db()
+
+
+# def process_image_with_vision(image_path: Path) -> str:
+#     """Send image to vision model for OCR extraction."""
+#     with open(image_path, "rb") as f:
+#         img_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+#     response = requests.post(
+#         VISION_URL,
+#         json={
+#             "model": "/models/vision",
+#             "messages": [
+#                     {
+#                         "role": "user",
+#                         "content": [
+#                             {
+#                                 "type": "image_url",
+#                                 "image_url": {
+#                                     "url": f"data:image/jpeg;base64,{img_b64}"
+#                                 }
+#                             },
+#                             {
+#                                 "type": "text",
+#                                 "text": "Free OCR."
+#                             }
+#                         ]
+#                     }
+#                     ],
+#                     "max_tokens": 1024,
+#         "temperature": 0.0,
+#         "extra_body": {
+#             "skip_special_tokens": False,
+#             # args used to control custom logits processor
+#             "vllm_xargs": {
+#                 "ngram_size": 30,
+#                 "window_size": 90,
+#                 # whitelist: <td>, </td>
+#                 "whitelist_token_ids": [128821, 128822],
+#             },
+#         },
+#         },
+#         timeout=120
+#     )
+#     response.raise_for_status()
+#     return response.json()["choices"][0]["message"]["content"]
+
+
+# def correct_text_with_llm(raw_text: str) -> str:
+#     """Send text to LLM for OCR error correction."""
+#     response = requests.post(
+#         TEXT_URL,
+#         json={
+#             "model": "/models/text",
+#             "messages": [{
+#                 "role": "user",
+#                 "content": f"Fix any OCR errors in this Arabic text and return only the corrected text: {raw_text}"
+#             }]
+#         },
+#         timeout=60
+#     )
+#     response.raise_for_status()
+#     return response.json()["choices"][0]["message"]["content"]
+
+
+# def worker_loop() -> None:
+#     """Background worker that processes pending OCR jobs."""
+#     logger.info("Worker started")
+#     while True:
+#         job = get_next_job()
+#         if not job:
+#             time.sleep(WORKER_POLL_INTERVAL)
+#             continue
+
+#         job_id, filename = job
+#         logger.info(f"Processing job {job_id}: {filename}")
+#         update_job(job_id, JobStatus.PROCESSING)
+
+#         try:
+#             image_path = UPLOAD_DIR / filename
+
+#             # Step 1: Extract text from image
+#             raw_text = process_image_with_vision(image_path)
+#             logger.info(f"Job {job_id}: Vision extraction complete")
+
+#             # Step 2: Correct OCR errors
+#             corrected_text = correct_text_with_llm(raw_text)
+#             logger.info(f"Job {job_id}: Text correction complete")
+
+#             # Step 3: Write the .md file
+#             md_path = image_path.with_suffix(".md")
+#             with open(md_path, "w", encoding="utf-8") as f:
+#                 f.write(corrected_text)
+#             logger.info(f"Job {job_id}: Markdown file written to {md_path}")
+
+#             update_job(job_id, JobStatus.COMPLETED, raw_text, corrected_text)
+#             logger.info(f"Job {job_id}: Completed successfully")
+
+#         except requests.RequestException as e:
+#             error_msg = f"API error: {str(e)}"
+#             logger.error(f"Job {job_id}: {error_msg}")
+#             update_job(job_id, f"{JobStatus.FAILED}: {error_msg}")
+#         except Exception as e:
+#             error_msg = str(e)
+#             logger.error(f"Job {job_id}: {error_msg}")
+#             update_job(job_id, f"{JobStatus.FAILED}: {error_msg}")
+
+
+# def start_worker() -> None:
+#     """Start the background worker thread."""
+#     if "worker_started" not in st.session_state:
+#         thread = threading.Thread(target=worker_loop, daemon=True)
+#         thread.start()
+#         st.session_state.worker_started = True
+#         logger.info("Background worker thread started")
+
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # Helpers
+# # ─────────────────────────────────────────────────────────────────────────────
+
+# def get_word_diff(text1: str, text2: str) -> str:
+#     """
+#     Generate a readable word-level diff between VLM (raw) and LLM (corrected) outputs.
+
+#     Display conventions (standard Markdown):
+#       ~~word~~  = word removed by LLM
+#       **word**  = word added / substituted by LLM
+#     """
+#     if not text1 and not text2:
+#         return "_No text to compare._"
+#     if not text1:
+#         return f"**{text2}**"
+#     if not text2:
+#         return f"~~{text1}~~"
+
+#     words1 = text1.split()
+#     words2 = text2.split()
+
+#     if words1 == words2:
+#         return "_Texts are identical — no corrections were made._"
+
+#     matcher = difflib.SequenceMatcher(None, words1, words2, autojunk=False)
+#     parts = []
+#     for opcode, a0, a1, b0, b1 in matcher.get_opcodes():
+#         if opcode == "equal":
+#             parts.append(" ".join(words1[a0:a1]))
+#         elif opcode == "delete":
+#             parts.append(f"~~{' '.join(words1[a0:a1])}~~")
+#         elif opcode == "insert":
+#             parts.append(f"**{' '.join(words2[b0:b1])}**")
+#         elif opcode == "replace":
+#             parts.append(
+#                 f"~~{' '.join(words1[a0:a1])}~~ **{' '.join(words2[b0:b1])}**"
+#             )
+#     return " ".join(parts)
+
+
+# def fix_data_permissions() -> None:
+#     """
+#     Attempt to fix data-directory ownership and permissions on Linux/Docker.
+#     Equivalent to running:
+#         chown -R 1000:1000 data
+#         chmod -R 755 data
+#     Silently skipped on Windows or when the caller lacks privileges.
+#     """
+#     if sys.platform == "win32":
+#         return
+#     data_dir = str(UPLOAD_DIR.parent)
+#     try:
+#         subprocess.run(
+#             ["chown", "-R", "1000:1000", data_dir],
+#             check=False, capture_output=True, timeout=10
+#         )
+#         subprocess.run(
+#             ["chmod", "-R", "755", data_dir],
+#             check=False, capture_output=True, timeout=10
+#         )
+#         logger.info("Data directory permissions fixed")
+#     except Exception:
+#         pass  # Non-critical; user may lack privileges
+
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # UI sections
+# # ─────────────────────────────────────────────────────────────────────────────
+
+# def render_token_gate() -> bool:
+#     """
+#     On the very first load (or when no token is stored), show a prominent
+#     token-setup screen and halt further rendering.
+#     Returns True once a token is available so the caller can proceed.
+#     """
+#     token = st.session_state.get("hf_token", os.getenv("HF_TOKEN", "")).strip()
+#     if token:
+#         return True
+
+#     st.warning(
+#         "### 🔑 Hugging Face Token Required\n\n"
+#         "This system downloads **google/gemma-3-4b-it** (Gemma 3 4B) — a gated model. "
+#         "Your token must have been granted access to it before model setup will work.\n\n"
+#         "**Steps:**\n"
+#         "1. Visit [huggingface.co/google/gemma-3-4b-it](https://huggingface.co/google/gemma-3-4b-it) "
+#         "and accept the licence.\n"
+#         "2. Generate a *read* token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).\n"
+#         "3. Paste the token below and click **Save & Continue**."
+#     )
+
+#     col_input, col_btn = st.columns([4, 1])
+#     with col_input:
+#         new_token = st.text_input(
+#             "Hugging Face Token",
+#             type="password",
+#             placeholder="hf_...",
+#             label_visibility="collapsed",
+#         )
+#     with col_btn:
+#         save = st.button("Save & Continue", type="primary")
+
+#     if save and new_token.strip():
+#         st.session_state["hf_token"] = new_token.strip()
+#         os.environ["HF_TOKEN"] = new_token.strip()
+#         st.rerun()
+#     elif save:
+#         st.error("Please enter a valid token before continuing.")
+
+#     return False
+
+
+# def render_hf_token_sidebar() -> None:
+#     """Always-visible token management widget in the sidebar."""
+#     st.sidebar.markdown("---")
+#     st.sidebar.subheader("🔑 Hugging Face Token")
+#     st.sidebar.caption(
+#         "Required for model downloads. "
+#         "Token must have access to **google/gemma-3-4b-it** (Gemma 3 4B)."
+#     )
+#     current = st.session_state.get("hf_token", os.getenv("HF_TOKEN", ""))
+#     new_token = st.sidebar.text_input(
+#         "Token",
+#         value=current,
+#         type="password",
+#         placeholder="hf_...",
+#         help="huggingface.co/settings/tokens",
+#     )
+#     if new_token and new_token != current:
+#         st.session_state["hf_token"] = new_token
+#         os.environ["HF_TOKEN"] = new_token
+#         st.sidebar.success("Token updated.")
+#     elif not new_token:
+#         st.sidebar.warning("⚠️ No token set — model downloads will fail.")
+
+
+# def render_upload_tab() -> None:
+#     """Render the batch upload tab."""
+#     st.header("Upload Documents")
+#     st.markdown("Upload images containing Arabic text for OCR processing.")
+
+#     files = st.file_uploader(
+#         "Drag and drop images here",
+#         accept_multiple_files=True,
+#         type=["png", "jpg", "jpeg", "tiff", "bmp"]
+#     )
+
+#     if st.button("Start Processing", type="primary", disabled=not files):
+#         queued_count = 0
+#         for file in files:
+#             file_path = UPLOAD_DIR / file.name
+#             with open(file_path, "wb") as f:
+#                 f.write(file.read())
+#             add_job(file.name)
+#             queued_count += 1
+
+#         st.success(f"Queued {queued_count} file(s) for processing.")
+#         st.rerun()
+
+
+# def render_results_tab() -> None:
+#     """Render the results and history tab."""
+#     st.header("Processing History")
+
+#     # ── Database management ───────────────────────────────────────
+#     with st.expander("🗄️ Database Management", expanded=False):
+#         st.markdown(
+#             "Use **Clear Database** to remove all jobs and start fresh.\n\n"
+#             "If you encounter *permission errors* on Linux / Docker, run these "
+#             "commands on the host first:"
+#         )
+#         st.code(
+#             "cd ~/ocr/Oman-OCR\n"
+#             "chown -R 1000:1000 data\n"
+#             "chmod -R 755 data",
+#             language="bash",
+#         )
+#         if st.button("🗑️ Clear Database", type="secondary"):
+#             fix_data_permissions()
+#             clear_db()
+#             st.session_state.selected_job_id = None
+#             st.success("Database cleared.")
+#             st.rerun()
+
+#     # ── Statistics ────────────────────────────────────────────────
+#     stats = get_job_stats()
+#     if stats:
+#         cols = st.columns(4)
+#         cols[0].metric("Pending", stats.get(JobStatus.PENDING, 0))
+#         cols[1].metric("Processing", stats.get(JobStatus.PROCESSING, 0))
+#         cols[2].metric("Completed", stats.get(JobStatus.COMPLETED, 0))
+#         cols[3].metric("Failed", len([k for k in stats if k.startswith(JobStatus.FAILED)]))
+
+#     if st.button("Refresh"):
+#         st.rerun()
+
+#     jobs = get_all_jobs()
+#     if not jobs:
+#         st.info("No jobs in the queue. Upload some images to get started.")
+#         return
+
+#     df = pd.DataFrame(
+#         jobs,
+#         columns=["ID", "Filename", "Status", "Raw Text", "Corrected Text", "Created At"]
+#     )
+
+#     # Store selected job
+#     if "selected_job_id" not in st.session_state:
+#         st.session_state.selected_job_id = None
+
+#     st.subheader("Jobs")
+
+#     # Display compact table (no long text)
+#     for _, row in df.iterrows():
+#         cols = st.columns([1, 3, 2, 2])
+#         cols[0].write(row["ID"])
+#         cols[1].write(row["Filename"])
+#         cols[2].write(row["Status"])
+#         if cols[3].button("View", key=f"view_{row['ID']}"):
+#             st.session_state.selected_job_id = row["ID"]
+
+#     # ── Job detail view ───────────────────────────────────────────
+#     if st.session_state.selected_job_id is not None:
+#         job = df[df["ID"] == st.session_state.selected_job_id].iloc[0]
+
+#         st.divider()
+#         st.subheader(f"📄 OCR Result — {job['Filename']}")
+
+#         # Side-by-side: VLM output vs LLM output
+#         col_vlm, col_llm = st.columns(2)
+
+#         with col_vlm:
+#             with st.expander("🤖 VLM Output (Raw OCR)", expanded=True):
+#                 st.markdown(
+#                     job["Raw Text"] or "_No output yet._",
+#                     unsafe_allow_html=False
+#                 )
+
+#         with col_llm:
+#             with st.expander("✨ LLM Output (Corrected)", expanded=True):
+#                 st.markdown(
+#                     job["Corrected Text"] or "_No output yet._",
+#                     unsafe_allow_html=False
+#                 )
+
+#         # Diff section
+#         with st.expander("🔍 Differences (VLM → LLM)", expanded=True):
+#             st.caption(
+#                 "~~strikethrough~~ = removed by LLM  |  **bold** = added / substituted by LLM"
+#             )
+#             diff_md = get_word_diff(
+#                 job["Raw Text"] or "",
+#                 job["Corrected Text"] or ""
+#             )
+#             st.markdown(diff_md, unsafe_allow_html=False)
+
+
+# def main() -> None:
+#     """Main application entry point."""
+#     st.set_page_config(
+#         page_title="Arabic OCR System",
+#         page_icon="📝",
+#         layout="wide"
+#     )
+
+#     st.title("Arabic OCR System")
+#     st.markdown("Extract and correct Arabic text from document images.")
+
+#     # ── Sidebar: token management ─────────────────────────────────
+#     render_hf_token_sidebar()
+
+#     # ── Token gate: block the UI until a token is provided ────────
+#     if not render_token_gate():
+#         st.stop()
+
+#     # Start background worker
+#     start_worker()
+
+#     # Render tabs
+#     tab1, tab2 = st.tabs(["📤 Batch Upload", "📋 Results & History"])
+
+#     with tab1:
+#         render_upload_tab()
+
+#     with tab2:
+#         render_results_tab()
+
+
+# if __name__ == "__main__":
+#     main()
 """Arabic OCR Application - Main entry point with Enhanced UI."""
 
+import base64
+import difflib
+import html as html_lib
 import logging
+import os
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+import pandas as pd
+import requests
 import streamlit as st
 from dotenv import load_dotenv
-
-from config import apply_custom_styles, LANGUAGES
-from utils import get_text, start_worker
-from render import render_language_selector, render_upload_and_results
 from PIL import Image
 
 from database import (
+    JobStatus,
+    add_job,
+    clear_db,
+    get_all_jobs,
+    get_job_stats,
+    get_next_job,
     init_db,
-    clear_all_data,
+    update_job,
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
 # Configuration
+# ─────────────────────────────────────────────────────────────────────────────
 load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
+VISION_URL = os.getenv("VISION_URL", "http://localhost:8000/v1/chat/completions")
+TEXT_URL = os.getenv("TEXT_URL", "http://localhost:8001/v1/chat/completions")
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
+WORKER_POLL_INTERVAL = 2  # seconds
+
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+LANGUAGES = {"en": "🇬🇧 English", "ar": "🇸🇦 العربية"}
+
+TRANSLATIONS = {
+    "en": {
+        "title": "Arabic OCR System",
+        "subtitle": "Extract and correct Arabic text from document images",
+        "upload_header": "Upload Documents",
+        "upload_description": "Upload images containing Arabic text for OCR processing.",
+        "upload_instructions": "Supported formats: PNG, JPG, JPEG, TIFF, BMP",
+        "upload_placeholder": "Drag and drop images here",
+        "upload_button": "🚀 Start Processing",
+        "results_header": "Processing Results",
+        "stats_header": "Statistics",
+        "pending": "Pending",
+        "processing": "Processing",
+        "completed": "Completed",
+        "failed": "Failed",
+        "all_files": "Total Files",
+        "success_rate": "Success Rate",
+        "no_jobs": "No jobs yet",
+        "no_completed": "No completed jobs yet",
+        "current_session": "Completed Results",
+        "processing_queue": "Processing Queue",
+        "unprocessed_text": "⚠️ Raw VLM Output",
+        "ai_powered": "✨ AI-Corrected",
+        "corrected": "Corrected Text",
+        "comparison_view": "🔍 Comparison",
+        "file": "File",
+        "created": "Created",
+        "status": "Status",
+        "download_raw": "📥 Download Raw",
+        "download_text": "📥 Download Corrected",
+        "download_report": "📥 Download Report",
+        "no_corrected": "No corrected text available.",
+        "clear_results": "🗑️ Clear All",
+        "new_session": "Session cleared!",
+        "queued_success": "✅ Queued {count} file(s) for processing.",
+        "refresh_button": "🔄 Refresh",
+        "position": "Position",
+        "raw": "Raw",
+    },
+    "ar": {
+        "title": "نظام التعرف الضوئي على النصوص العربية",
+        "subtitle": "استخراج وتصحيح النصوص العربية من صور المستندات",
+        "upload_header": "تحميل المستندات",
+        "upload_description": "قم بتحميل الصور التي تحتوي على نص عربي للمعالجة.",
+        "upload_instructions": "الصيغ المدعومة: PNG, JPG, JPEG, TIFF, BMP",
+        "upload_placeholder": "اسحب وأفلت الصور هنا",
+        "upload_button": "🚀 بدء المعالجة",
+        "results_header": "نتائج المعالجة",
+        "stats_header": "الإحصائيات",
+        "pending": "قيد الانتظار",
+        "processing": "قيد المعالجة",
+        "completed": "مكتمل",
+        "failed": "فشل",
+        "all_files": "إجمالي الملفات",
+        "success_rate": "نسبة النجاح",
+        "no_jobs": "لا توجد مهام بعد",
+        "no_completed": "لا توجد مهام مكتملة بعد",
+        "current_session": "النتائج المكتملة",
+        "processing_queue": "قائمة المعالجة",
+        "unprocessed_text": "⚠️ نص خام",
+        "ai_powered": "✨ مصحح بالذكاء الاصطناعي",
+        "corrected": "النص المصحح",
+        "comparison_view": "🔍 المقارنة",
+        "file": "الملف",
+        "created": "تاريخ الإنشاء",
+        "status": "الحالة",
+        "download_raw": "📥 تحميل الخام",
+        "download_text": "📥 تحميل المصحح",
+        "download_report": "📥 تحميل التقرير",
+        "no_corrected": "لا يوجد نص مصحح.",
+        "clear_results": "🗑️ مسح الكل",
+        "new_session": "تم مسح الجلسة!",
+        "queued_success": "✅ تمت إضافة {count} ملف(ات) للمعالجة.",
+        "refresh_button": "🔄 تحديث",
+        "position": "الموضع",
+        "raw": "خام",
+    },
+}
+
+
+def t(key: str) -> str:
+    """Get translated text for the current language."""
+    lang = st.session_state.get("language", "en")
+    return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Custom CSS
+# ─────────────────────────────────────────────────────────────────────────────
+
+CUSTOM_CSS = """
+<style>
+/* --- Global --- */
+.stApp { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+/* Header */
+.header-container {
+    text-align: center;
+    padding: 1.5rem 0 1rem;
+}
+.header-title {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 2.4rem;
+    font-weight: 800;
+    margin-bottom: 0.25rem;
+}
+.header-subtitle {
+    color: #718096;
+    font-size: 1.05rem;
+}
+
+/* Metric cards */
+.metric-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.2rem 1rem;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    border: 1px solid #e2e8f0;
+}
+.metric-value { font-size: 1.8rem; font-weight: 700; color: #2d3748; }
+.metric-label { font-size: 0.85rem; color: #718096; margin-top: 0.25rem; }
+
+/* Custom card */
+.custom-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border: 1px solid #e2e8f0;
+}
+
+/* Text displays */
+.text-display {
+    padding: 1rem;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    min-height: 180px;
+    max-height: 400px;
+    overflow-y: auto;
+    line-height: 1.8;
+    font-size: 1rem;
+}
+.text-display.rtl { direction: rtl; text-align: right; }
+.text-display.ltr { direction: ltr; text-align: left; }
+
+/* Image preview */
+.image-preview {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* Status badges */
+.status-completed {
+    background: #c6f6d5; color: #22543d;
+    padding: 0.2rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600;
+}
+.status-processing {
+    background: #bee3f8; color: #2a4365;
+    padding: 0.2rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600;
+}
+.status-pending {
+    background: #fefcbf; color: #744210;
+    padding: 0.2rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600;
+}
+.status-failed {
+    background: #fed7d7; color: #742a2a;
+    padding: 0.2rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600;
+}
+</style>
+"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Backend helpers (unchanged from your original main.py)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def process_image_with_vision(image_path: Path) -> str:
+    """Send image to vision model for OCR extraction."""
+    with open(image_path, "rb") as f:
+        img_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+    response = requests.post(
+        VISION_URL,
+        json={
+            "model": "/models/vision",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{img_b64}",
+                            },
+                        },
+                        {
+                            "type": "text",
+                            "text": "Free OCR.",
+                        },
+                    ],
+                }
+            ],
+            "max_tokens": 1024,
+            "temperature": 0.0,
+            "extra_body": {
+                "skip_special_tokens": False,
+                "vllm_xargs": {
+                    "ngram_size": 30,
+                    "window_size": 90,
+                    "whitelist_token_ids": [128821, 128822],
+                },
+            },
+        },
+        timeout=120,
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
+
+
+def correct_text_with_llm(raw_text: str) -> str:
+    """Send text to LLM for OCR error correction."""
+    response = requests.post(
+        TEXT_URL,
+        json={
+            "model": "/models/text",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Fix any OCR errors in this Arabic text and return "
+                        f"only the corrected text: {raw_text}"
+                    ),
+                }
+            ],
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
+
+
+def worker_loop() -> None:
+    """Background worker that processes pending OCR jobs."""
+    logger.info("Worker started")
+    while True:
+        job = get_next_job()
+        if not job:
+            time.sleep(WORKER_POLL_INTERVAL)
+            continue
+
+        job_id, filename = job
+        logger.info(f"Processing job {job_id}: {filename}")
+        update_job(job_id, JobStatus.PROCESSING)
+
+        try:
+            image_path = UPLOAD_DIR / filename
+            raw_text = process_image_with_vision(image_path)
+            logger.info(f"Job {job_id}: Vision extraction complete")
+
+            corrected_text = correct_text_with_llm(raw_text)
+            logger.info(f"Job {job_id}: Text correction complete")
+
+            md_path = image_path.with_suffix(".md")
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write(corrected_text)
+            logger.info(f"Job {job_id}: Markdown written to {md_path}")
+
+            update_job(job_id, JobStatus.COMPLETED, raw_text, corrected_text)
+            logger.info(f"Job {job_id}: Completed successfully")
+
+        except requests.RequestException as e:
+            error_msg = f"API error: {e}"
+            logger.error(f"Job {job_id}: {error_msg}")
+            update_job(job_id, f"{JobStatus.FAILED}: {error_msg}")
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Job {job_id}: {error_msg}")
+            update_job(job_id, f"{JobStatus.FAILED}: {error_msg}")
+
+
+def start_worker() -> None:
+    """Start the background worker thread (once per session)."""
+    if "worker_started" not in st.session_state:
+        thread = threading.Thread(target=worker_loop, daemon=True)
+        thread.start()
+        st.session_state.worker_started = True
+        logger.info("Background worker thread started")
+
+
+def calculate_similarity(text1: str, text2: str) -> float:
+    """Return percentage similarity between two strings."""
+    return difflib.SequenceMatcher(None, text1, text2).ratio() * 100
+
+
+def fix_data_permissions() -> None:
+    """Attempt to fix data-directory ownership on Linux/Docker."""
+    if sys.platform == "win32":
+        return
+    data_dir = str(UPLOAD_DIR.parent)
+    try:
+        subprocess.run(
+            ["chown", "-R", "1000:1000", data_dir],
+            check=False, capture_output=True, timeout=10,
+        )
+        subprocess.run(
+            ["chmod", "-R", "755", data_dir],
+            check=False, capture_output=True, timeout=10,
+        )
+    except Exception:
+        pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UI – Token gate & sidebar
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_token_gate() -> bool:
+    """Block the UI until a Hugging Face token is available."""
+    token = st.session_state.get("hf_token", os.getenv("HF_TOKEN", "")).strip()
+    if token:
+        return True
+
+    st.warning(
+        "### 🔑 Hugging Face Token Required\n\n"
+        "This system downloads **google/gemma-3-4b-it** (Gemma 3 4B) — a gated model. "
+        "Your token must have been granted access before model setup will work.\n\n"
+        "**Steps:**\n"
+        "1. Visit [huggingface.co/google/gemma-3-4b-it](https://huggingface.co/google/gemma-3-4b-it) "
+        "and accept the licence.\n"
+        "2. Generate a *read* token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).\n"
+        "3. Paste the token below and click **Save & Continue**."
+    )
+
+    col_in, col_btn = st.columns([4, 1])
+    with col_in:
+        new_token = st.text_input(
+            "HF Token", type="password", placeholder="hf_...",
+            label_visibility="collapsed",
+        )
+    with col_btn:
+        save = st.button("Save & Continue", type="primary")
+
+    if save and new_token.strip():
+        st.session_state["hf_token"] = new_token.strip()
+        os.environ["HF_TOKEN"] = new_token.strip()
+        st.rerun()
+    elif save:
+        st.error("Please enter a valid token.")
+    return False
+
+
+def render_hf_token_sidebar() -> None:
+    """Always-visible token management widget."""
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔑 Hugging Face Token")
+    current = st.session_state.get("hf_token", os.getenv("HF_TOKEN", ""))
+    new_token = st.sidebar.text_input(
+        "Token", value=current, type="password", placeholder="hf_...",
+    )
+    if new_token and new_token != current:
+        st.session_state["hf_token"] = new_token
+        os.environ["HF_TOKEN"] = new_token
+        st.sidebar.success("Token updated.")
+    elif not new_token:
+        st.sidebar.warning("⚠️ No token — model downloads will fail.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UI – Language selector
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_language_selector() -> None:
+    """Top-right language picker."""
+    _, _, col_lang = st.columns([8, 1, 1])
+    with col_lang:
+        selected = st.selectbox(
+            "",
+            options=list(LANGUAGES.keys()),
+            format_func=lambda x: LANGUAGES[x],
+            index=list(LANGUAGES.keys()).index(
+                st.session_state.get("language", "en")
+            ),
+            label_visibility="collapsed",
+            key="lang_selector",
+        )
+    if selected != st.session_state.get("language", "en"):
+        st.session_state.language = selected
+        st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UI – Statistics
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_statistics(jobs: list) -> None:
+    """Render stat cards above the results."""
+    completed = [j for j in jobs if j[2] == JobStatus.COMPLETED]
+    pending = [j for j in jobs if j[2] in (JobStatus.PENDING, JobStatus.PROCESSING)]
+    failed = [j for j in jobs if j[2].startswith(JobStatus.FAILED)]
+    rate = (len(completed) / len(jobs) * 100) if jobs else 0
+
+    st.markdown(
+        f"<h3 style='margin-bottom:1.5rem;'>{t('stats_header')}</h3>",
+        unsafe_allow_html=True,
+    )
+    c1, c2, c3, c4, c5 = st.columns(5)
+    for col, val, label in [
+        (c1, len(pending), t("pending")),
+        (c2, len(completed), t("completed")),
+        (c3, len(failed), t("failed")),
+        (c4, len(jobs), t("all_files")),
+    ]:
+        col.markdown(
+            f'<div class="metric-card">'
+            f'<div class="metric-value">{val}</div>'
+            f'<div class="metric-label">{label}</div></div>',
+            unsafe_allow_html=True,
+        )
+    c5.markdown(
+        f'<div class="metric-card">'
+        f'<div class="metric-value">{rate:.1f}%</div>'
+        f'<div class="metric-label">{t("success_rate")}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UI – Upload + Results (single-page layout)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def render_upload_section() -> None:
+    """File uploader + clear button."""
+    st.markdown(
+        f'<div class="custom-card" style="margin-bottom:2rem;">'
+        f'<h2 style="color:#667eea;margin-bottom:0.5rem;">{t("upload_header")}</h2>'
+        f'<p style="color:#6c757d;">{t("upload_description")}</p>'
+        f'<p style="color:#adb5bd;font-size:0.9rem;">{t("upload_instructions")}</p>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    col_upload, _, _, col_clear = st.columns([3, 2, 1, 1])
+
+    with col_upload:
+        files = st.file_uploader(
+            t("upload_placeholder"),
+            accept_multiple_files=True,
+            type=["png", "jpg", "jpeg", "tiff", "bmp"],
+            key="file_uploader",
+        )
+
+    with col_clear:
+        if st.button(t("clear_results"), type="secondary", use_container_width=True):
+            fix_data_permissions()
+            clear_db()
+            # remove uploaded files
+            for f in UPLOAD_DIR.glob("*"):
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+            st.session_state.selected_image = 0
+            st.success(t("new_session"))
+            st.rerun()
+
+    if files:
+        for i, f in enumerate(files, 1):
+            st.write(f"{i}. **{f.name}** ({f.size / 1024:.1f} KB)")
+
+        _, col_btn, _ = st.columns([2, 1, 2])
+        with col_btn:
+            if st.button(t("upload_button"), use_container_width=True, type="primary"):
+                queued = 0
+                for f in files:
+                    fp = UPLOAD_DIR / f.name
+                    with open(fp, "wb") as out:
+                        out.write(f.read())
+                    add_job(f.name)
+                    queued += 1
+                st.success(t("queued_success").format(count=queued))
+                time.sleep(1)
+                st.rerun()
+
+
+def render_results_section() -> None:
+    """Three-column results view with image, raw text, corrected/comparison."""
+    st.markdown("---")
+    st.markdown(
+        f'<h2 style="color:#667eea;margin-bottom:1rem;">{t("results_header")}</h2>',
+        unsafe_allow_html=True,
+    )
+
+    jobs = get_all_jobs()
+
+    if not jobs:
+        st.markdown(
+            f'<div class="custom-card" style="text-align:center;padding:3rem;">'
+            f'<div style="font-size:4rem;color:#adb5bd;">📭</div>'
+            f'<h3 style="color:#6c757d;">{t("no_jobs")}</h3>'
+            f'<p style="color:#adb5bd;">{t("upload_description")}</p></div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    render_statistics(jobs)
+
+    completed = [j for j in jobs if j[2] == JobStatus.COMPLETED]
+    pending = [j for j in jobs if j[2] in (JobStatus.PENDING, JobStatus.PROCESSING)]
+    failed = [j for j in jobs if j[2].startswith(JobStatus.FAILED)]
+
+    # ── Completed results ─────────────────────────────────────────
+    if completed:
+        st.markdown(
+            f"<h3 style='margin-top:2rem;'>{t('current_session')}</h3>",
+            unsafe_allow_html=True,
+        )
+
+        if "selected_image" not in st.session_state or st.session_state.selected_image >= len(completed):
+            st.session_state.selected_image = 0
+
+        left_col, mid_col, right_col = st.columns([0.8, 1.2, 1.2])
+
+        # ── Left: image selector + preview ────────────────────────
+        with left_col:
+            names = [f"📄 {j[1]}" for j in completed]
+            selected_tab = st.radio(
+                "Select Image",
+                options=names,
+                index=st.session_state.selected_image,
+                key="image_selector",
+                label_visibility="collapsed",
+            )
+            idx = names.index(selected_tab)
+            if idx != st.session_state.selected_image:
+                st.session_state.selected_image = idx
+                st.rerun()
+
+            job = completed[idx]
+            filename = job[1]
+            image_path = UPLOAD_DIR / filename
+
+            if image_path.exists():
+                try:
+                    img = Image.open(image_path)
+                    max_w = 350
+                    disp_w = min(img.width, max_w)
+                    st.markdown('<div class="image-preview">', unsafe_allow_html=True)
+                    st.image(img, width=disp_w, use_container_width=False)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                    c1, c2 = st.columns(2)
+                    c1.markdown(f"**{t('file')}:**<br>{filename}", unsafe_allow_html=True)
+                    c2.markdown(f"**{t('created')}:**<br>{job[5]}", unsafe_allow_html=True)
+                    st.markdown(
+                        f"**{t('status')}:** <span class='status-completed'>"
+                        f"{t('completed')}</span>",
+                        unsafe_allow_html=True,
+                    )
+                except Exception as e:
+                    st.error(f"Error loading image: {e}")
+            else:
+                st.warning(f"Image not found: {filename}")
+
+        # ── Middle: Raw VLM output ────────────────────────────────
+        with mid_col:
+            st.markdown(
+                f'<div style="background:linear-gradient(135deg,#ff6b6b,#ee5a24);'
+                f'color:white;padding:0.5rem 1rem;border-radius:20px;'
+                f'display:inline-block;margin-bottom:1rem;font-weight:600;">'
+                f'{t("unprocessed_text")}</div>',
+                unsafe_allow_html=True,
+            )
+
+            job = completed[st.session_state.selected_image]
+            raw_text = job[3] or ""
+            corrected_text = job[4] or ""
+            lang = st.session_state.get("language", "en")
+            text_cls = "rtl" if lang == "ar" else "ltr"
+
+            if raw_text:
+                similarity = calculate_similarity(raw_text, corrected_text) if corrected_text else None
+                sim_str = f" | Similarity: {similarity:.1f}%" if similarity else ""
+                st.markdown(
+                    f'<div class="text-display {text_cls}" '
+                    f'style="background:#fff5f5;border-color:#feb2b2;">'
+                    f'<div style="font-size:0.85rem;color:#718096;margin-bottom:0.4rem;">'
+                    f'Length: {len(raw_text)} chars{sim_str}</div>'
+                    f'{html_lib.escape(raw_text)}</div>',
+                    unsafe_allow_html=True,
+                )
+
+                with st.expander("📊 Raw Text Analysis"):
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("Characters", len(raw_text))
+                    m2.metric("Words", len(raw_text.split()))
+                    m3.metric("Lines", len(raw_text.splitlines()))
+                    if similarity:
+                        st.progress(similarity / 100, f"Similarity: {similarity:.1f}%")
+
+                _, dl, _ = st.columns([1, 1, 1])
+                with dl:
+                    st.download_button(
+                        t("download_raw"),
+                        data=raw_text,
+                        file_name=f"{Path(job[1]).stem}_raw.txt",
+                        mime="text/plain",
+                        key=f"dl_raw_{job[0]}",
+                        use_container_width=True,
+                    )
+            else:
+                st.warning("No raw text available.")
+
+        # ── Right: Corrected + Comparison tabs ────────────────────
+        with right_col:
+            tab_corrected, tab_compare = st.tabs(
+                [t("corrected"), t("comparison_view")]
+            )
+
+            # --- Corrected text ---
+            with tab_corrected:
+                st.markdown(
+                    f'<div style="background:linear-gradient(135deg,#667eea,#764ba2);'
+                    f'color:white;padding:0.5rem 1rem;border-radius:20px;'
+                    f'display:inline-block;margin-bottom:1rem;font-weight:600;">'
+                    f'{t("ai_powered")}</div>',
+                    unsafe_allow_html=True,
+                )
+
+                if corrected_text:
+                    st.markdown(
+                        f'<div class="text-display {text_cls}" '
+                        f'style="background:#f0fff4;border-color:#9ae6b4;">'
+                        f'<div style="font-size:0.85rem;color:#718096;margin-bottom:0.4rem;">'
+                        f'Length: {len(corrected_text)} chars</div>'
+                        f'{html_lib.escape(corrected_text)}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown("---")
+                    _, dl, _ = st.columns([1, 1, 1])
+                    with dl:
+                        st.download_button(
+                            t("download_text"),
+                            data=corrected_text,
+                            file_name=f"{Path(job[1]).stem}_corrected.txt",
+                            mime="text/plain",
+                            key=f"dl_corr_{job[0]}",
+                            use_container_width=True,
+                        )
+                else:
+                    st.warning(t("no_corrected"))
+
+            # --- Comparison view ---
+            with tab_compare:
+                st.markdown(
+                    '<div style="background:linear-gradient(135deg,#f6ad55,#ed8936);'
+                    'color:white;padding:0.5rem 1rem;border-radius:20px;'
+                    'display:inline-block;margin-bottom:1rem;font-weight:600;">'
+                    '🔄 Change Analysis</div>',
+                    unsafe_allow_html=True,
+                )
+
+                if raw_text and corrected_text:
+                    sim = calculate_similarity(raw_text, corrected_text)
+
+                    # Character-level diff
+                    char_diff = list(difflib.ndiff(raw_text, corrected_text))
+                    diff_html_parts = []
+                    for ch in char_diff:
+                        if ch.startswith("+ "):
+                            diff_html_parts.append(
+                                f'<span style="background:#c6f6d5;color:#22543d;'
+                                f'padding:2px;border-radius:3px;">'
+                                f'{html_lib.escape(ch[2:])}</span>'
+                            )
+                        elif ch.startswith("- "):
+                            diff_html_parts.append(
+                                f'<span style="background:#fed7d7;color:#742a2a;'
+                                f'padding:2px;border-radius:3px;'
+                                f'text-decoration:line-through;">'
+                                f'{html_lib.escape(ch[2:])}</span>'
+                            )
+                        elif ch.startswith("  "):
+                            diff_html_parts.append(html_lib.escape(ch[2:]))
+                    diff_html = "".join(diff_html_parts)
+
+                    changes_count = sum(
+                        1 for d in char_diff if d.startswith("+ ") or d.startswith("- ")
+                    )
+                    change_ratio = abs(len(corrected_text) - len(raw_text)) / max(len(raw_text), 1)
+
+                    mc1, mc2, mc3 = st.columns(3)
+                    mc1.metric("Similarity", f"{sim:.1f}%")
+                    mc2.metric("Changes", changes_count)
+                    mc3.metric("Change Ratio", f"{change_ratio:.2%}")
+
+                    bar_color = (
+                        "green" if sim > 90 else "orange" if sim > 70 else "red"
+                    )
+                    st.markdown(
+                        f'<div style="margin:1rem 0;">'
+                        f'<div style="background:#e2e8f0;height:10px;border-radius:5px;">'
+                        f'<div style="background:{bar_color};width:{sim}%;'
+                        f'height:100%;border-radius:5px;"></div></div>'
+                        f'<div style="font-size:0.85rem;color:#718096;'
+                        f'text-align:center;margin-top:0.25rem;">Text Similarity</div></div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    st.markdown(
+                        f'<div class="text-display {text_cls}" '
+                        f'style="background:#f7fafc;border-color:#cbd5e0;'
+                        f'font-family:monospace;font-size:0.9rem;">'
+                        f'<div style="font-size:0.85rem;color:#718096;'
+                        f'margin-bottom:0.4rem;">Character-level differences:</div>'
+                        f'{diff_html}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    st.markdown(
+                        '<div style="margin-top:0.5rem;font-size:0.85rem;color:#718096;">'
+                        '<span style="background:#c6f6d5;padding:2px 5px;border-radius:3px;'
+                        'margin-right:1rem;">Green: Inserted</span>'
+                        '<span style="background:#fed7d7;padding:2px 5px;border-radius:3px;">'
+                        'Red: Deleted</span></div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    # Word-level changes
+                    rw = raw_text.split()
+                    cw = corrected_text.split()
+                    word_diffs = []
+                    for i, (a, b) in enumerate(zip(rw, cw)):
+                        if a != b:
+                            word_diffs.append({"pos": i, "raw": a, "corrected": b})
+
+                    if word_diffs:
+                        with st.expander(f"📝 Word-level Changes ({len(word_diffs)})"):
+                            for wd in word_diffs[:10]:
+                                st.write(
+                                    f"**{t('position')} {wd['pos']}:** "
+                                    f"`{wd['raw']}` → `{wd['corrected']}`"
+                                )
+                            if len(word_diffs) > 10:
+                                st.write(f"… and {len(word_diffs) - 10} more")
+
+                    # Downloadable report
+                    report = (
+                        f"COMPARISON REPORT\n{'=' * 40}\n"
+                        f"File: {job[1]}\nTimestamp: {job[5]}\n\n"
+                        f"Similarity: {sim:.1f}%\n"
+                        f"Raw Length: {len(raw_text)}\n"
+                        f"Corrected Length: {len(corrected_text)}\n"
+                        f"Changes: {changes_count}\n"
+                        f"Change Ratio: {change_ratio:.2%}\n\n"
+                        f"RAW TEXT\n{'-' * 40}\n{raw_text}\n\n"
+                        f"CORRECTED TEXT\n{'-' * 40}\n{corrected_text}\n"
+                    )
+                    _, dl, _ = st.columns([1, 1, 1])
+                    with dl:
+                        st.download_button(
+                            t("download_report"),
+                            data=report,
+                            file_name=f"{Path(job[1]).stem}_comparison.txt",
+                            mime="text/plain",
+                            key=f"dl_report_{job[0]}",
+                            use_container_width=True,
+                        )
+                else:
+                    st.warning("Both raw and corrected text are required for comparison.")
+
+    # ── Pending / failed queue ────────────────────────────────────
+    if pending or failed:
+        with st.expander(f"🔍 {t('processing_queue')}", expanded=True):
+            if pending:
+                st.markdown(f"**{t('processing_queue')}:**")
+                for j in pending:
+                    status_cls = (
+                        "status-processing"
+                        if j[2] == JobStatus.PROCESSING
+                        else "status-pending"
+                    )
+                    status_txt = (
+                        t("processing")
+                        if j[2] == JobStatus.PROCESSING
+                        else t("pending")
+                    )
+                    st.markdown(
+                        f'<div style="display:flex;align-items:center;margin-bottom:0.5rem;">'
+                        f'<div style="flex:1;">📄 <strong>{j[1]}</strong></div>'
+                        f'<span class="{status_cls}">{status_txt}</span></div>',
+                        unsafe_allow_html=True,
+                    )
+            if failed:
+                st.markdown(f"**{t('failed')}:**")
+                for j in failed:
+                    st.markdown(
+                        f'<div style="display:flex;align-items:center;margin-bottom:0.5rem;">'
+                        f'<div style="flex:1;">❌ <strong>{j[1]}</strong></div>'
+                        f'<span class="status-failed">{t("failed")}</span></div>',
+                        unsafe_allow_html=True,
+                    )
+    elif not completed:
+        st.markdown(
+            f'<div class="custom-card" style="text-align:center;padding:3rem;">'
+            f'<div style="font-size:4rem;color:#17a2b8;">⏳</div>'
+            f'<h3 style="color:#6c757d;">{t("no_completed")}</h3>'
+            f'<p style="color:#adb5bd;">Processing in progress…</p></div>',
+            unsafe_allow_html=True,
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────────────────────
+
 def main() -> None:
-    """Main application entry point."""
+    """Application entry point."""
     st.set_page_config(
         page_title="Arabic OCR System",
-        page_icon=Image.open("logo.jpg"),
+        page_icon="📝",
         layout="wide",
-        initial_sidebar_state="collapsed"
+        initial_sidebar_state="collapsed",
     )
-    
-    # Apply custom CSS styles
-    apply_custom_styles()
 
-    # Initialize session state
-    if "language" not in st.session_state:
-        st.session_state.language = "en"
-    
-    if "selected_image" not in st.session_state:
-        st.session_state.selected_image = 0
-    
-    if "first_upload" not in st.session_state:
-        st.session_state.first_upload = True
-    
-    if "clear_data_on_upload" not in st.session_state:
-        st.session_state.clear_data_on_upload = False
-    
-    # Initialize database ONCE at the beginning
+    st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
+    # Session state defaults
+    for key, default in [
+        ("language", "en"),
+        ("selected_image", 0),
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = default
+
+    # Initialize database once
     if "db_initialized" not in st.session_state:
-        with st.spinner("Initializing database..."):
-            try:
-                init_db()
-                st.session_state.db_initialized = True
-                logger.info("Database initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize database: {e}")
-                st.error(f"Database initialization failed: {e}")
-                return
-    
-    # Auto-clear previous data when app starts
-    if "app_initialized" not in st.session_state:
-        with st.spinner("Starting fresh session..."):
-            try:
-                # Clear all previous data on app start
-                clear_all_data()
-                st.session_state.app_initialized = True
-                logger.info("App initialized - previous data cleared")
-            except Exception as e:
-                logger.error(f"Failed to clear previous data: {e}")
-                # Continue anyway, but log the error
-                st.session_state.app_initialized = True
+        init_db()
+        st.session_state.db_initialized = True
 
-    # Render language selector
-    render_language_selector(LANGUAGES)
-    
-    # Create enhanced header
-    st.markdown("""
-    <div class="header-container">
-        <h1 class="header-title">{}</h1>
-        <p class="header-subtitle">{}</p>
-    </div>
-    """.format(get_text("title"), get_text("subtitle")), unsafe_allow_html=True)
+    # Sidebar: HF token
+    render_hf_token_sidebar()
 
-    # Start background worker
+    # Token gate
+    if not render_token_gate():
+        st.stop()
+
+    # Language selector
+    render_language_selector()
+
+    # Header
+    st.markdown(
+        f'<div class="header-container">'
+        f'<h1 class="header-title">{t("title")}</h1>'
+        f'<p class="header-subtitle">{t("subtitle")}</p></div>',
+        unsafe_allow_html=True,
+    )
+
+    # Start worker
     start_worker()
 
-    # Single tab for everything
-    render_upload_and_results()
+    # Render single-page layout
+    render_upload_section()
+    render_results_section()
 
 
 if __name__ == "__main__":
