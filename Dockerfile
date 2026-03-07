@@ -1,4 +1,4 @@
-# Arabic OCR System - Application Container
+# Arabic Document Processor - Application Container
 # Multi-stage build for optimized image size
 
 FROM python:3.10-slim AS builder

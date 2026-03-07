@@ -2,7 +2,7 @@
 REM Setup script for Arabic OCR System (Windows)
 
 echo ==================================================
-echo    Arabic OCR System - Automated Setup
+echo    Arabic Document Processor - Automated Setup
 echo ==================================================
 echo.
 

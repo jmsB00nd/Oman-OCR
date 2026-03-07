@@ -4,7 +4,7 @@
 set -e
 
 echo "=================================================="
-echo "   Arabic OCR System - Automated Setup"
+echo "   Arabic Document Processor - Automated Setup"
 echo "=================================================="
 echo ""
 

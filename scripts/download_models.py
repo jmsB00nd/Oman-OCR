@@ -1,4 +1,4 @@
-"""Automatic model downloader for Arabic OCR System."""
+"""Automatic model downloader for Arabic Document Processor."""
 
 import os
 import sys
@@ -136,7 +136,7 @@ def download_model(model_name: str, target_dir: Path, token: str) -> None:
 def main():
     """Check, download, and verify all required models."""
     print("\n" + "=" * 60)
-    print("  Arabic OCR System — Model Setup")
+    print("  Arabic Document Processor — Model Setup")
     print("=" * 60 + "\n")
 
     token = get_hf_token()
