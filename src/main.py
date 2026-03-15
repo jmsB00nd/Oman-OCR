@@ -357,7 +357,7 @@ def worker_loop() -> None:
                 f.write(corrected_text)
             logger.info(f"Job {job_id}: Markdown written to {md_path}")
 
-            update_job(job_id, JobStatus.COMPLETED, raw_text, corrected_text)
+            update_job(job_id, JobStatus.COMPLETED, filtered_text, corrected_text)
             logger.info(f"Job {job_id}: Completed successfully")
 
         except requests.RequestException as e:
