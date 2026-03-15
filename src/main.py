@@ -5,6 +5,7 @@ import difflib
 import html as html_lib
 import logging
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -294,6 +295,41 @@ def correct_text_with_llm(raw_text: str) -> str:
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
+def filter_tables_and_notes(text: str) -> str:
+    """Filter markdown text to keep only tables and note references."""
+    if not text:
+        return ""
+
+    filtered_lines = []
+    # Matches notes starting with (1), [1], (٠), [٠] etc. (\d catches Arabic numerals too)
+    note_pattern = re.compile(r'^\s*(\(\d+\)|\[\d+\])\s+')
+    in_note_block = False
+
+    for line in text.splitlines():
+        stripped = line.strip()
+
+        # Keep Table Rows
+        if stripped.startswith('|'):
+            filtered_lines.append(line)
+            in_note_block = False
+            
+        # Keep Notes (and add a blank line above them for readability)
+        elif note_pattern.match(stripped):
+            if filtered_lines and filtered_lines[-1].strip() != "":
+                filtered_lines.append("") 
+            filtered_lines.append(line)
+            in_note_block = True
+            
+        # Handle multi-line notes
+        elif in_note_block and stripped != "":
+            filtered_lines.append(line)
+            
+        # Empty lines break the multi-line note continuation
+        elif stripped == "":
+            in_note_block = False
+
+    return '\n'.join(filtered_lines).strip()
+
 
 def worker_loop() -> None:
     """Background worker that processes pending OCR jobs."""
@@ -312,8 +348,8 @@ def worker_loop() -> None:
             image_path = UPLOAD_DIR / filename
             raw_text = process_image_with_vision(image_path)
             logger.info(f"Job {job_id}: Vision extraction complete")
-
-            corrected_text = correct_text_with_llm(raw_text)
+            filtered_text = filter_tables_and_notes(raw_text)
+            corrected_text = correct_text_with_llm(filtered_text)
             logger.info(f"Job {job_id}: Text correction complete")
 
             md_path = image_path.with_suffix(".md")
