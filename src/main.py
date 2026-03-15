@@ -16,6 +16,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from PIL import Image
+import fitz
 
 from database import (
     JobStatus,
@@ -54,7 +55,7 @@ TRANSLATIONS = {
         "subtitle": "Extract and correct Arabic text from document images",
         "upload_header": "Upload Documents",
         "upload_description": "Upload images containing Arabic text for OCR processing.",
-        "upload_instructions": "Supported formats: PNG, JPG, JPEG, TIFF, BMP",
+        "upload_instructions": "Supported formats: PDF, PNG, JPG, JPEG, TIFF, BMP",
         "upload_placeholder": "Drag and drop images here",
         "upload_button": "🚀 Start Processing",
         "results_header": "Processing Results",
@@ -92,7 +93,7 @@ TRANSLATIONS = {
         "subtitle": "استخراج وتصحيح النصوص العربية من صور المستندات",
         "upload_header": "تحميل المستندات",
         "upload_description": "قم بتحميل الصور التي تحتوي على نص عربي للمعالجة.",
-        "upload_instructions": "الصيغ المدعومة: PNG, JPG, JPEG, TIFF, BMP",
+        "upload_instructions": "الصيغ المدعومة: PDF, PNG, JPG, JPEG, TIFF, BMP",
         "upload_placeholder": "اسحب وأفلت الصور هنا",
         "upload_button": "🚀 بدء المعالجة",
         "results_header": "نتائج المعالجة",
@@ -500,7 +501,8 @@ def render_upload_section() -> None:
         files = st.file_uploader(
             t("upload_placeholder"),
             accept_multiple_files=True,
-            type=["png", "jpg", "jpeg", "tiff", "bmp"],
+            # Added "pdf" to the accepted types list
+            type=["png", "jpg", "jpeg", "tiff", "bmp", "pdf"],
             key="file_uploader",
         )
 
@@ -527,11 +529,33 @@ def render_upload_section() -> None:
             if st.button(t("upload_button"), use_container_width=True, type="primary"):
                 queued = 0
                 for f in files:
-                    fp = UPLOAD_DIR / f.name
-                    with open(fp, "wb") as out:
-                        out.write(f.read())
-                    add_job(f.name)
-                    queued += 1
+                    file_bytes = f.read()
+                    
+                    if f.name.lower().endswith(".pdf"):
+                        # Open PDF from bytes
+                        pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
+                        
+                        # Iterate through pages and save as images
+                        for page_num in range(len(pdf_doc)):
+                            page = pdf_doc.load_page(page_num)
+                            # Render to image (dpi=150 is usually a good balance for OCR)
+                            pix = page.get_pixmap(dpi=150)
+                            
+                            # Create a unique filename for the page
+                            img_name = f"{Path(f.name).stem}_page_{page_num + 1}.jpg"
+                            img_path = UPLOAD_DIR / img_name
+                            
+                            # Save the image and add to database
+                            pix.save(str(img_path))
+                            add_job(img_name)
+                            queued += 1
+                    else:
+                        fp = UPLOAD_DIR / f.name
+                        with open(fp, "wb") as out:
+                            out.write(file_bytes)
+                        add_job(f.name)
+                        queued += 1
+                        
                 st.success(t("queued_success").format(count=queued))
                 time.sleep(1)
                 st.rerun()
