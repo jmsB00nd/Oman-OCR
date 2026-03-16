@@ -5,6 +5,7 @@ import difflib
 import html as html_lib
 import logging
 import os
+import shutil
 import re
 import subprocess
 import sys
@@ -546,10 +547,13 @@ def render_upload_section() -> None:
         if st.button(t("clear_results"), type="secondary", use_container_width=True):
             fix_data_permissions()
             clear_db()
-            # remove uploaded files
-            for f in UPLOAD_DIR.glob("*"):
+            # remove uploaded files AND directories
+            for p in UPLOAD_DIR.iterdir():
                 try:
-                    f.unlink()
+                    if p.is_dir():
+                        shutil.rmtree(p)
+                    else:
+                        p.unlink()
                 except Exception:
                     pass
             st.session_state.selected_image = 0
@@ -567,6 +571,11 @@ def render_upload_section() -> None:
                 for f in files:
                     file_bytes = f.read()
                     
+                    # Create a dedicated directory for this uploaded file based on its name
+                    file_stem = Path(f.name).stem
+                    file_dir = UPLOAD_DIR / file_stem
+                    file_dir.mkdir(parents=True, exist_ok=True)
+                    
                     if f.name.lower().endswith(".pdf"):
                         # Open PDF from bytes
                         pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -574,22 +583,24 @@ def render_upload_section() -> None:
                         # Iterate through pages and save as images
                         for page_num in range(len(pdf_doc)):
                             page = pdf_doc.load_page(page_num)
-                            # Render to image (dpi=150 is usually a good balance for OCR)
                             pix = page.get_pixmap(dpi=150)
                             
-                            # Create a unique filename for the page
-                            img_name = f"{Path(f.name).stem}_page_{page_num + 1}.jpg"
-                            img_path = UPLOAD_DIR / img_name
+                            img_name = f"{file_stem}_page_{page_num + 1}.jpg"
+                            img_path = file_dir / img_name
                             
-                            # Save the image and add to database
+                            # Save the image and add relative path to database
                             pix.save(str(img_path))
-                            add_job(img_name)
+                            rel_path = f"{file_stem}/{img_name}"
+                            add_job(rel_path)
                             queued += 1
                     else:
-                        fp = UPLOAD_DIR / f.name
+                        fp = file_dir / f.name
                         with open(fp, "wb") as out:
                             out.write(file_bytes)
-                        add_job(f.name)
+                        
+                        # Store relative path in database
+                        rel_path = f"{file_stem}/{f.name}"
+                        add_job(rel_path)
                         queued += 1
                         
                 st.success(t("queued_success").format(count=queued))
