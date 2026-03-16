@@ -332,6 +332,62 @@ def filter_tables_and_notes(text: str) -> str:
     return '\n'.join(filtered_lines).strip()
 
 
+def save_markdown_to_excel(md_text: str, excel_path: Path) -> None:
+    """Parse markdown text to extract tables and notes, saving to an Excel file."""
+    lines = md_text.splitlines()
+    table_data = []
+    notes = []
+    
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        
+        # Check if the line is part of a Markdown table
+        if stripped.startswith('|'):
+            # Skip the markdown separator rows (e.g., |---|---|)
+            if re.match(r'^\|[\-\s\|]+\|$', stripped) or re.match(r'^\|[\-\s\|]+$', stripped):
+                continue
+            
+            # Split row by pipe '|', ignoring the first and last empty strings from the edges
+            row_vals = [col.strip() for col in stripped.split('|')]
+            if stripped.endswith('|'):
+                row_vals = row_vals[1:-1]
+            else:
+                row_vals = row_vals[1:]
+            
+            table_data.append(row_vals)
+        else:
+            # It's a note
+            notes.append(stripped)
+            
+    # Write to Excel
+    try:
+        with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+            # Save Table
+            if table_data:
+                headers = table_data[0]
+                rows = []
+                # Ensure all rows have the same length as the header to avoid Pandas errors
+                for r in table_data[1:]:
+                    if len(r) < len(headers):
+                        r.extend([''] * (len(headers) - len(r)))
+                    elif len(r) > len(headers):
+                        r = r[:len(headers)]
+                    rows.append(r)
+                
+                df_table = pd.DataFrame(rows, columns=headers)
+                df_table.to_excel(writer, sheet_name='Table', index=False)
+            
+            # Save Notes
+            if notes:
+                df_notes = pd.DataFrame(notes, columns=["Notes"])
+                df_notes.to_excel(writer, sheet_name='Notes', index=False)
+                
+    except Exception as e:
+        logger.error(f"Failed to generate Excel file: {e}")
+
+
 def worker_loop() -> None:
     """Background worker that processes pending OCR jobs."""
     logger.info("Worker started")
@@ -357,6 +413,10 @@ def worker_loop() -> None:
             with open(md_path, "w", encoding="utf-8") as f:
                 f.write(corrected_text)
             logger.info(f"Job {job_id}: Markdown written to {md_path}")
+
+            excel_path = image_path.with_suffix(".xlsx")
+            save_markdown_to_excel(corrected_text, excel_path)
+            logger.info(f"Job {job_id}: Excel written to {excel_path}")
 
             update_job(job_id, JobStatus.COMPLETED, filtered_text, corrected_text)
             logger.info(f"Job {job_id}: Completed successfully")
