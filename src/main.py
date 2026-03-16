@@ -695,14 +695,18 @@ def render_results_section() -> None:
             if raw_text:
                 similarity = calculate_similarity(raw_text, corrected_text) if corrected_text else None
                 sim_str = f" | Similarity: {similarity:.1f}%" if similarity else ""
+                
                 st.markdown(
-                    f'<div class="text-display {text_cls}" '
-                    f'style="background:#fff5f5;border-color:#feb2b2;">'
-                    f'<div style="font-size:0.85rem;color:#718096;margin-bottom:0.4rem;">'
+                    f'<div style="background:#fff5f5; border:1px solid #feb2b2; '
+                    f'padding:0.5rem 1rem; border-radius:10px; margin-bottom:1rem;">'
+                    f'<div style="font-size:0.85rem; color:#718096;">'
                     f'Length: {len(raw_text)} chars{sim_str}</div>'
-                    f'{html_lib.escape(raw_text)}</div>',
+                    f'</div>',
                     unsafe_allow_html=True,
                 )
+                
+                with st.container(height=400):
+                    st.markdown(raw_text)
 
                 with st.expander("📊 Raw Text Analysis"):
                     m1, m2, m3 = st.columns(3)
@@ -743,13 +747,17 @@ def render_results_section() -> None:
 
                 if corrected_text:
                     st.markdown(
-                        f'<div class="text-display {text_cls}" '
-                        f'style="background:#f0fff4;border-color:#9ae6b4;">'
-                        f'<div style="font-size:0.85rem;color:#718096;margin-bottom:0.4rem;">'
+                        f'<div style="background:#f0fff4;border:1px solid #9ae6b4; '
+                        f'padding:0.5rem 1rem; border-radius:10px; margin-bottom:1rem;">'
+                        f'<div style="font-size:0.85rem;color:#718096;">'
                         f'Length: {len(corrected_text)} chars</div>'
-                        f'{html_lib.escape(corrected_text)}</div>',
+                        f'</div>',
                         unsafe_allow_html=True,
                     )
+                    
+                    with st.container(height=400):
+                        st.markdown(corrected_text)
+                        
                     st.markdown("---")
                     _, dl, _ = st.columns([1, 1, 1])
                     with dl:
