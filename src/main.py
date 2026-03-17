@@ -253,12 +253,17 @@ def process_image_with_vision(image_path: Path) -> str:
                         },
                         {
                             "type": "text",
-                            "text": "Free OCR.",
+                            "text": (
+                                "Extract all text from this image exactly as it appears. "
+                                "If there is a table, format it strictly as a Markdown table. "
+                                "Ensure absolutely no columns, rows, or empty cells are missed. "
+                                "Every table row must begin and end with a pipe character '|'."
+                            ),
                         },
                     ],
                 }
             ],
-            "max_tokens": 1024,
+            "max_tokens": 2048,
             "temperature": 0.0,
             "extra_body": {
                 "skip_special_tokens": False,
@@ -643,7 +648,7 @@ def render_upload_section() -> None:
                         # Iterate through pages and save as images
                         for page_num in range(len(pdf_doc)):
                             page = pdf_doc.load_page(page_num)
-                            pix = page.get_pixmap(dpi=150)
+                            pix = page.get_pixmap(dpi=300)
                             
                             img_name = f"{file_stem}_page_{page_num + 1}.jpg"
                             img_path = file_dir / img_name
