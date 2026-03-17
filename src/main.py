@@ -253,12 +253,7 @@ def process_image_with_vision(image_path: Path) -> str:
                         },
                         {
                             "type": "text",
-                            "text": (
-                                "Extract all text from this image exactly as it appears. "
-                                "If there is a table, format it strictly as a Markdown table. "
-                                "Ensure absolutely no columns, rows, or empty cells are missed. "
-                                "Every table row must begin and end with a pipe character '|'."
-                            ),
+                            "text": "Free OCR.",
                         },
                     ],
                 }
