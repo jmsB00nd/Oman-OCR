@@ -410,6 +410,10 @@ def worker_loop() -> None:
             image_path = UPLOAD_DIR / filename
             raw_text = process_image_with_vision(image_path)
             logger.info(f"Job {job_id}: Vision extraction complete")
+            raw_md_path = image_path.with_name(f"{image_path.stem}_raw.md")
+            with open(raw_md_path, "w", encoding="utf-8") as f:
+                f.write(raw_text)
+            logger.info(f"Job {job_id}: Raw Markdown written to {raw_md_path}")
             filtered_text = filter_tables_and_notes(raw_text)
             corrected_text = correct_text_with_llm(filtered_text)
             logger.info(f"Job {job_id}: Text correction complete")
