@@ -647,7 +647,7 @@ def render_upload_section() -> None:
                         # Iterate through pages and save as images
                         for page_num in range(len(pdf_doc)):
                             page = pdf_doc.load_page(page_num)
-                            pix = page.get_pixmap(dpi=150)
+                            pix = page.get_pixmap(dpi=300)
                             
                             img_name = f"{file_stem}_page_{page_num + 1}.jpg"
                             img_path = file_dir / img_name
