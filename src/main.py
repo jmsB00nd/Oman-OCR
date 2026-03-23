@@ -285,8 +285,8 @@ def correct_text_with_llm(raw_text: str) -> str:
                 {
                     "role": "user",
                     "content": (
-                        "Fix any OCR errors in this Arabic text and return "
-                        f"only the corrected text: {raw_text}"
+                        "Fix OCR errors in this text but DO NOT alter the Markdown table structure. Keep all '|' delimiters exactly where they are, and do not merge or delete empty columns."
+                        f"{raw_text}"
                     ),
                 }
             ],
