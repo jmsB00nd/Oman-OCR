@@ -253,7 +253,7 @@ def process_image_with_vision(image_path: Path) -> str:
                         },
                         {
                             "type": "text",
-                            "text": "Extract all text and tables from this image. Represent tables strictly in Markdown format using '|' delimiters. You MUST preserve all empty cells, rows, and columns exactly as they appear in the image. Ensure numerical financial data is perfectly accurate.",
+                            "text": "Free OCR.",
                         },
                     ],
                 }
