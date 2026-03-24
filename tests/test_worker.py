@@ -50,7 +50,7 @@ class TestWorkerJobProcessing:
             mock_post.side_effect = side_effect
 
             # Import and patch the database module in main
-            import main
+            import ui
             monkeypatch.setattr("main.UPLOAD_DIR", temp_upload_dir)
 
             # Process the job manually (simulate one iteration)
@@ -64,8 +64,8 @@ class TestWorkerJobProcessing:
 
             # Run the processing logic
             image_path = temp_upload_dir / filename
-            raw_text = main.process_image_with_vision(image_path)
-            corrected_text = main.correct_text_with_llm(raw_text)
+            raw_text = ui.process_image_with_vision(image_path)
+            corrected_text = ui.correct_text_with_llm(raw_text)
             update_job(job_id, JobStatus.COMPLETED, raw_text, corrected_text)
 
         # Verify job was completed
@@ -98,7 +98,7 @@ class TestWorkerJobProcessing:
         with patch("main.requests.post") as mock_post:
             mock_post.side_effect = requests.ConnectionError("Connection refused")
 
-            import main
+            import ui
             monkeypatch.setattr("main.UPLOAD_DIR", temp_upload_dir)
 
             job = get_next_job()
@@ -108,7 +108,7 @@ class TestWorkerJobProcessing:
             # Simulate error handling
             try:
                 image_path = temp_upload_dir / filename
-                main.process_image_with_vision(image_path)
+                ui.process_image_with_vision(image_path)
             except requests.RequestException as e:
                 update_job(job_id, f"{JobStatus.FAILED}: API error: {str(e)}")
 
@@ -255,7 +255,7 @@ class TestWorkerErrorRecovery:
         fail_job = add_job("fail.jpg")
         success_job = add_job("success.jpg")
 
-        import main
+        import ui
         monkeypatch.setattr("main.UPLOAD_DIR", temp_upload_dir)
 
         # Process first job (simulate failure)
@@ -266,7 +266,7 @@ class TestWorkerErrorRecovery:
             mock_post.side_effect = requests.Timeout("Request timed out")
 
             try:
-                main.process_image_with_vision(temp_upload_dir / job[1])
+                ui.process_image_with_vision(temp_upload_dir / job[1])
             except requests.RequestException as e:
                 update_job(job[0], f"{JobStatus.FAILED}: {str(e)}")
 
@@ -291,8 +291,8 @@ class TestWorkerErrorRecovery:
 
             mock_post.side_effect = side_effect
 
-            raw = main.process_image_with_vision(temp_upload_dir / job[1])
-            corrected = main.correct_text_with_llm(raw)
+            raw = ui.process_image_with_vision(temp_upload_dir / job[1])
+            corrected = ui.correct_text_with_llm(raw)
             update_job(job[0], JobStatus.COMPLETED, raw, corrected)
 
         # Verify final state
@@ -314,14 +314,14 @@ class TestWorkerErrorRecovery:
         # Add job for non-existent file
         job_id = add_job("nonexistent.jpg")
 
-        import main
+        import ui
         monkeypatch.setattr("main.UPLOAD_DIR", temp_upload_dir)
 
         job = get_next_job()
         update_job(job[0], JobStatus.PROCESSING)
 
         try:
-            main.process_image_with_vision(temp_upload_dir / job[1])
+            ui.process_image_with_vision(temp_upload_dir / job[1])
         except FileNotFoundError as e:
             update_job(job[0], f"{JobStatus.FAILED}: {str(e)}")
         except Exception as e:

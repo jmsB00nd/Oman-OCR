@@ -21,7 +21,7 @@ class TestProcessImageWithVision:
             mock_post.return_value.json.return_value = mock_vision_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import process_image_with_vision
+            from ui import process_image_with_vision
 
             result = process_image_with_vision(sample_image)
 
@@ -43,7 +43,7 @@ class TestProcessImageWithVision:
             mock_post.return_value.json.return_value = mock_vision_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import process_image_with_vision
+            from ui import process_image_with_vision
 
             result = process_image_with_vision(sample_image)
 
@@ -58,7 +58,7 @@ class TestProcessImageWithVision:
             mock_post.return_value.json.return_value = mock_vision_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import process_image_with_vision
+            from ui import process_image_with_vision
 
             process_image_with_vision(sample_image)
 
@@ -71,7 +71,7 @@ class TestProcessImageWithVision:
             mock_post.return_value.json.return_value = mock_vision_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import process_image_with_vision
+            from ui import process_image_with_vision
 
             process_image_with_vision(sample_image)
 
@@ -85,7 +85,7 @@ class TestProcessImageWithVision:
                 "500 Server Error"
             )
 
-            from main import process_image_with_vision
+            from ui import process_image_with_vision
 
             with pytest.raises(requests.HTTPError):
                 process_image_with_vision(sample_image)
@@ -95,7 +95,7 @@ class TestProcessImageWithVision:
         with patch("main.requests.post") as mock_post:
             mock_post.side_effect = requests.ConnectionError("Connection refused")
 
-            from main import process_image_with_vision
+            from ui import process_image_with_vision
 
             with pytest.raises(requests.ConnectionError):
                 process_image_with_vision(sample_image)
@@ -110,7 +110,7 @@ class TestCorrectTextWithLLM:
             mock_post.return_value.json.return_value = mock_text_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import correct_text_with_llm
+            from ui import correct_text_with_llm
 
             raw_text = "السلام علیکم"
             correct_text_with_llm(raw_text)
@@ -125,7 +125,7 @@ class TestCorrectTextWithLLM:
             mock_post.return_value.json.return_value = mock_text_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import correct_text_with_llm
+            from ui import correct_text_with_llm
 
             result = correct_text_with_llm("السلام علیکم")
 
@@ -140,7 +140,7 @@ class TestCorrectTextWithLLM:
             mock_post.return_value.json.return_value = mock_text_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import correct_text_with_llm
+            from ui import correct_text_with_llm
 
             correct_text_with_llm("test text")
 
@@ -152,7 +152,7 @@ class TestCorrectTextWithLLM:
             mock_post.return_value.json.return_value = mock_text_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import correct_text_with_llm
+            from ui import correct_text_with_llm
 
             correct_text_with_llm("test text")
 
@@ -166,7 +166,7 @@ class TestCorrectTextWithLLM:
                 "500 Server Error"
             )
 
-            from main import correct_text_with_llm
+            from ui import correct_text_with_llm
 
             with pytest.raises(requests.HTTPError):
                 correct_text_with_llm("test text")
@@ -177,7 +177,7 @@ class TestCorrectTextWithLLM:
             mock_post.return_value.json.return_value = mock_text_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import correct_text_with_llm
+            from ui import correct_text_with_llm
 
             # Should not raise, just process normally
             result = correct_text_with_llm("")
@@ -207,7 +207,7 @@ class TestFullPipeline:
 
             mock_post.side_effect = side_effect
 
-            from main import correct_text_with_llm, process_image_with_vision
+            from ui import correct_text_with_llm, process_image_with_vision
 
             # Run pipeline
             raw_text = process_image_with_vision(sample_image)
@@ -246,7 +246,7 @@ class TestFullPipeline:
 
             mock_post.side_effect = side_effect
 
-            from main import correct_text_with_llm, process_image_with_vision
+            from ui import correct_text_with_llm, process_image_with_vision
 
             raw_text = process_image_with_vision(sample_image)
             corrected_text = correct_text_with_llm(raw_text)
@@ -265,7 +265,7 @@ class TestRequestPayloads:
             mock_post.return_value.json.return_value = mock_vision_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import process_image_with_vision
+            from ui import process_image_with_vision
 
             process_image_with_vision(sample_image)
 
@@ -292,7 +292,7 @@ class TestRequestPayloads:
             mock_post.return_value.json.return_value = mock_text_response
             mock_post.return_value.raise_for_status = MagicMock()
 
-            from main import correct_text_with_llm
+            from ui import correct_text_with_llm
 
             correct_text_with_llm("test text")
 

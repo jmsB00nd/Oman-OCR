@@ -32,7 +32,7 @@ services:
               count: 1
               capabilities: [gpu]
     ports:
-      - "8000:8000"
+      - "8000:8000" # Vision Engine Port
     networks:
       - ocr-network
     restart: unless-stopped
@@ -63,7 +63,7 @@ services:
               count: 1
               capabilities: [gpu]
     ports:
-      - "8001:8001"
+      - "8001:8001" # Text Engine Port
     networks:
       - ocr-network
     restart: unless-stopped
@@ -74,12 +74,13 @@ services:
       retries: 3
       start_period: 180s
 
-  # --- Application Core ---
-  app:
+  # --- NEW: FastAPI Backend Core ---
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ocr-app
+    container_name: ocr-backend
+    command: uvicorn api:app --host 0.0.0.0 --port 8002
     env_file:
       - .env
     environment:
@@ -90,7 +91,7 @@ services:
     volumes:
       - ./data:/data
     ports:
-      - "8080:8501"
+      - "8002:8002" # API Port mapped out for UI
     networks:
       - ocr-network
     depends_on:
@@ -98,6 +99,24 @@ services:
         condition: service_healthy
       text-engine:
         condition: service_healthy
+    restart: unless-stopped
+
+  # --- NEW: Streamlit Frontend UI ---
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ocr-frontend
+    command: streamlit run ui.py --server.port=8501 --server.address=0.0.0.0
+    environment:
+      # Connects Streamlit to the backend container
+      - API_URL=http://backend:8002 
+    ports:
+      - "8080:8501" # Access on browser via 8080
+    networks:
+      - ocr-network
+    depends_on:
+      - backend
     restart: unless-stopped
 
 networks:
