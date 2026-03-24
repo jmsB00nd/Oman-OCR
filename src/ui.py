@@ -5,7 +5,7 @@ import os
 import time
 from io import BytesIO
 from pathlib import Path
-
+import html as html_lib
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -215,6 +215,12 @@ def render_results_section(jobs: list) -> None:
             st.markdown(f'<div style="background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:white;padding:0.5rem 1rem;border-radius:20px;display:inline-block;margin-bottom:1rem;font-weight:600;">{t("unprocessed_text")}</div>', unsafe_allow_html=True)
             raw_text = job["raw_text"] or ""
             if raw_text:
+                with st.expander("📊 Raw Text Analysis"):
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("Characters", len(raw_text))
+                    m2.metric("Words", len(raw_text.split()))
+                    m3.metric("Lines", len(raw_text.splitlines()))
+                    
                 with st.container(height=400): st.markdown(raw_text)
                 
                 # Existing Raw Download Button
@@ -259,7 +265,66 @@ def render_results_section(jobs: list) -> None:
             with tab_compare:
                 if raw_text and corrected_text:
                     sim = calculate_similarity(raw_text, corrected_text)
-                    st.metric("Similarity", f"{sim:.1f}%")
+                    
+                    # --- RESTORED COMPARISON LOGIC ---
+                    # Character-level diff
+                    char_diff = list(difflib.ndiff(raw_text, corrected_text))
+                    diff_html_parts = []
+                    for ch in char_diff:
+                        if ch.startswith("+ "):
+                            diff_html_parts.append(f'<span style="background:#c6f6d5;color:#22543d;padding:2px;border-radius:3px;">{html_lib.escape(ch[2:])}</span>')
+                        elif ch.startswith("- "):
+                            diff_html_parts.append(f'<span style="background:#fed7d7;color:#742a2a;padding:2px;border-radius:3px;text-decoration:line-through;">{html_lib.escape(ch[2:])}</span>')
+                        elif ch.startswith("  "):
+                            diff_html_parts.append(html_lib.escape(ch[2:]))
+                    diff_html = "".join(diff_html_parts)
+
+                    changes_count = sum(1 for d in char_diff if d.startswith("+ ") or d.startswith("- "))
+                    change_ratio = abs(len(corrected_text) - len(raw_text)) / max(len(raw_text), 1)
+
+                    mc1, mc2, mc3 = st.columns(3)
+                    mc1.metric("Similarity", f"{sim:.1f}%")
+                    mc2.metric("Changes", changes_count)
+                    mc3.metric("Change Ratio", f"{change_ratio:.2%}")
+
+                    bar_color = "green" if sim > 90 else "orange" if sim > 70 else "red"
+                    st.markdown(
+                        f'<div style="margin:1rem 0;">'
+                        f'<div style="background:#e2e8f0;height:10px;border-radius:5px;">'
+                        f'<div style="background:{bar_color};width:{sim}%;height:100%;border-radius:5px;"></div></div>'
+                        f'<div style="font-size:0.85rem;color:#718096;text-align:center;margin-top:0.25rem;">Text Similarity</div></div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    lang = st.session_state.get("language", "en")
+                    text_cls = "rtl" if lang == "ar" else "ltr"
+                    
+                    st.markdown(
+                        f'<div class="{text_cls}" style="background:#f7fafc;border:1px solid #cbd5e0;border-radius:10px;padding:1rem;font-family:monospace;font-size:0.9rem;max-height:300px;overflow-y:auto;">'
+                        f'<div style="font-size:0.85rem;color:#718096;margin-bottom:0.4rem;">Character-level differences:</div>'
+                        f'{diff_html}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    st.markdown(
+                        '<div style="margin-top:0.5rem;font-size:0.85rem;color:#718096;">'
+                        '<span style="background:#c6f6d5;padding:2px 5px;border-radius:3px;margin-right:1rem;">Green: Inserted</span>'
+                        '<span style="background:#fed7d7;padding:2px 5px;border-radius:3px;">Red: Deleted</span></div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    # Word-level changes
+                    rw = raw_text.split()
+                    cw = corrected_text.split()
+                    word_diffs = [{"pos": i, "raw": a, "corrected": b} for i, (a, b) in enumerate(zip(rw, cw)) if a != b]
+
+                    if word_diffs:
+                        with st.expander(f"📝 Word-level Changes ({len(word_diffs)})"):
+                            for wd in word_diffs[:10]:
+                                st.write(f"**{t('position')} {wd['pos']}:** `{wd['raw']}` → `{wd['corrected']}`")
+                            if len(word_diffs) > 10:
+                                st.write(f"… and {len(word_diffs) - 10} more")
+                    # ---------------------------------------------
                 else:
                     st.warning("Comparison requires both texts.")
 
