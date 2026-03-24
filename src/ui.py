@@ -1,8 +1,8 @@
 """Streamlit Frontend for Arabic Document Processor."""
 
 import difflib
-import html as html_lib
 import os
+import time
 from io import BytesIO
 from pathlib import Path
 
@@ -95,7 +95,6 @@ def t(key: str) -> str:
     lang = st.session_state.get("language", "en")
     return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
 
-
 CUSTOM_CSS = """
 <style>
 .stApp { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -106,14 +105,7 @@ CUSTOM_CSS = """
 .metric-value { font-size: 1.8rem; font-weight: 700; color: #2d3748; }
 .metric-label { font-size: 0.85rem; color: #718096; margin-top: 0.25rem; }
 .custom-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
-.text-display { padding: 1rem; border-radius: 10px; border: 1px solid #e2e8f0; min-height: 180px; max-height: 400px; overflow-y: auto; line-height: 1.8; font-size: 1rem; }
-.text-display.rtl { direction: rtl; text-align: right; }
-.text-display.ltr { direction: ltr; text-align: left; }
 .image-preview { border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-.status-completed { background: #c6f6d5; color: #22543d; padding: 0.2rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600; }
-.status-processing { background: #bee3f8; color: #2a4365; padding: 0.2rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600; }
-.status-pending { background: #fefcbf; color: #744210; padding: 0.2rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600; }
-.status-failed { background: #fed7d7; color: #742a2a; padding: 0.2rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600; }
 </style>
 """
 
@@ -172,22 +164,15 @@ def render_upload_section() -> None:
         _, col_btn, _ = st.columns([2, 1, 2])
         with col_btn:
             if st.button(t("upload_button"), use_container_width=True, type="primary"):
-                # Send files to FastAPI
                 files_payload = [("files", (f.name, f.getvalue(), f.type)) for f in files]
                 response = requests.post(f"{API_URL}/upload", files=files_payload)
                 if response.status_code == 200:
                     st.success(t("queued_success"))
                     st.rerun()
 
-def render_results_section() -> None:
+def render_results_section(jobs: list) -> None:
     st.markdown("---")
     st.markdown(f'<h2 style="color:#667eea;margin-bottom:1rem;">{t("results_header")}</h2>', unsafe_allow_html=True)
-
-    try:
-        jobs = requests.get(f"{API_URL}/jobs").json()
-    except Exception:
-        st.error("Cannot connect to backend API.")
-        return
 
     if not jobs:
         st.markdown(f'<div class="custom-card" style="text-align:center;padding:3rem;"><div style="font-size:4rem;color:#adb5bd;">📭</div><h3 style="color:#6c757d;">{t("no_jobs")}</h3><p style="color:#adb5bd;">{t("upload_description")}</p></div>', unsafe_allow_html=True)
@@ -214,8 +199,6 @@ def render_results_section() -> None:
                 st.rerun()
 
             job = completed[idx]
-            
-            # Fetch image directly from FastAPI URL
             img_url = f"{API_URL}/images/{job['filename']}"
             try:
                 img_response = requests.get(img_url)
@@ -226,15 +209,9 @@ def render_results_section() -> None:
             except Exception:
                 st.warning("Image preview not available.")
 
-            c1, c2 = st.columns(2)
-            c1.markdown(f"**{t('file')}:**<br>{job['filename']}", unsafe_allow_html=True)
-            c2.markdown(f"**{t('created')}:**<br>{job['created_at']}", unsafe_allow_html=True)
-
         with mid_col:
             st.markdown(f'<div style="background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:white;padding:0.5rem 1rem;border-radius:20px;display:inline-block;margin-bottom:1rem;font-weight:600;">{t("unprocessed_text")}</div>', unsafe_allow_html=True)
             raw_text = job["raw_text"] or ""
-            corrected_text = job["corrected_text"] or ""
-            
             if raw_text:
                 with st.container(height=400): st.markdown(raw_text)
                 st.download_button(t("download_raw"), data=raw_text, file_name=f"{Path(job['filename']).stem}_raw.txt", key=f"dl_raw_{job['id']}", use_container_width=True)
@@ -243,6 +220,7 @@ def render_results_section() -> None:
 
         with right_col:
             tab_corrected, tab_compare = st.tabs([t("corrected"), t("comparison_view")])
+            corrected_text = job["corrected_text"] or ""
             with tab_corrected:
                 st.markdown(f'<div style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:0.5rem 1rem;border-radius:20px;display:inline-block;margin-bottom:1rem;font-weight:600;">{t("ai_powered")}</div>', unsafe_allow_html=True)
                 if corrected_text:
@@ -275,12 +253,21 @@ def main() -> None:
     render_language_selector()
     st.markdown(f'<div class="header-container"><h1 class="header-title">{t("title")}</h1><p class="header-subtitle">{t("subtitle")}</p></div>', unsafe_allow_html=True)
     
-    # Force UI to fetch API updates frequently if processing
-    import time
     render_upload_section()
-    render_results_section()
-    time.sleep(2)
-    st.rerun()
+    
+    # Fetch jobs once to share between logic and UI
+    try:
+        jobs = requests.get(f"{API_URL}/jobs").json()
+    except Exception:
+        st.error("Cannot connect to backend API.")
+        jobs = []
+
+    render_results_section(jobs)
+
+    active_jobs = [j for j in jobs if j["status"] in ("PENDING", "PROCESSING")]
+    if active_jobs:
+        time.sleep(3) 
+        st.rerun()
 
 if __name__ == "__main__":
     main()
