@@ -45,6 +45,7 @@ TRANSLATIONS = {
         "created": "Created",
         "status": "Status",
         "download_raw": "📥 Download Raw",
+        "download_excel": "📥 Download Excel",
         "download_text": "📥 Download Corrected",
         "download_report": "📥 Download Report",
         "no_corrected": "No corrected text available.",
@@ -81,6 +82,7 @@ TRANSLATIONS = {
         "created": "تاريخ الإنشاء",
         "status": "الحالة",
         "download_raw": "📥 تحميل الخام",
+        "download_excel": "📥 تحميل إكسيل",
         "download_text": "📥 تحميل المصحح",
         "download_report": "📥 تحميل التقرير",
         "no_corrected": "لا يوجد نص مصحح.",
@@ -214,7 +216,33 @@ def render_results_section(jobs: list) -> None:
             raw_text = job["raw_text"] or ""
             if raw_text:
                 with st.container(height=400): st.markdown(raw_text)
-                st.download_button(t("download_raw"), data=raw_text, file_name=f"{Path(job['filename']).stem}_raw.txt", key=f"dl_raw_{job['id']}", use_container_width=True)
+                
+                # Existing Raw Download Button
+                st.download_button(
+                    t("download_raw"), 
+                    data=raw_text, 
+                    file_name=f"{Path(job['filename']).stem}_raw.txt", 
+                    key=f"dl_raw_{job['id']}", 
+                    use_container_width=True
+                )
+                
+                excel_rel_path = Path(job['filename']).with_suffix('.xlsx').as_posix()
+                excel_url = f"{API_URL}/images/{excel_rel_path}"
+                
+                try:
+                    excel_response = requests.get(excel_url)
+                    if excel_response.status_code == 200:
+                        st.download_button(
+                            label=t("download_excel"),
+                            data=excel_response.content,
+                            file_name=f"{Path(job['filename']).stem}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"dl_excel_{job['id']}",
+                            use_container_width=True
+                        )
+                except Exception:
+                    pass
+
             else:
                 st.warning("No raw text available.")
 

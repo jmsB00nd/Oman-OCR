@@ -182,7 +182,7 @@ def worker_loop() -> None:
 
             image_path.with_name(f"{image_path.stem}_raw.md").write_text(raw_text, encoding="utf-8")
             image_path.with_suffix(".md").write_text(corrected_text, encoding="utf-8")
-            save_markdown_to_excel(corrected_text, image_path.with_suffix(".xlsx"))
+            save_markdown_to_excel(filtered_text, image_path.with_suffix(".xlsx"))
 
             update_job(job_id, JobStatus.COMPLETED, filtered_text, corrected_text)
         except Exception as e:
