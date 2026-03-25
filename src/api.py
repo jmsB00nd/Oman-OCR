@@ -68,13 +68,17 @@ def process_image_with_tesseract(image_path: Path) -> str:
         raise
 
 def structure_text_with_llm(raw_text: str) -> str:
-    """Uses the LLM to structure the messy OCR output into Markdown tables."""
-    # 1. Make the prompt extremely strict about output format
+    """Uses the LLM to extract only tables and relevant financial notes."""
     system_prompt = (
-        "You are an expert data extraction bot. You are given OCR-extracted financial table text. "
-        "Fix the table by reconstructing rows and columns, detecting headers, and removing noise. "
-        "CRITICAL: Output ONLY the raw Markdown table. Do NOT include any introductory text, explanations, or thinking processes. "
-        "Do not say 'Here is the table' or explain your reasoning."
+        "You are a specialized financial data extraction agent. "
+        "Your goal is to extract ONLY tables and supplemental financial notes from the provided OCR text. "
+        "\n\nSTRICT RULES:\n"
+        "1. TABLES: Reconstruct all financial grids, ledgers, or balance sheets into clean Markdown tables.\n"
+        "2. NOTES: Extract paragraphs that provide context to the numbers (e.g., accounting policies, "
+        "explanations of line items, or legal disclosures). These may NOT always start with numbers like (1) or [1].\n"
+        "3. EXCLUDE: Do not include headers, footers, page numbers, or decorative text.\n"
+        "4. LANGUAGE: Maintain the original Arabic and English text as found in the document.\n"
+        "5. NO HALLUCINATION: If a value is unreadable, use '---'. Do not invent figures."
     )
     
     response = requests.post(
@@ -83,21 +87,14 @@ def structure_text_with_llm(raw_text: str) -> str:
             "model": "/models/text",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Structure this OCR output into Markdown:\n\n{raw_text}"}
+                {"role": "user", "content": f"Extract tables and notes from this text:\n\n{raw_text}"}
             ],
-            "temperature": 0.0,
+            "temperature": 0.0, # Set to 0 for maximum extraction accuracy
         },
         timeout=120,
     )
     response.raise_for_status()
-    
-    # 3. (Optional) Strip out reasoning tags just in case it uses them anyway
-    content = response.json()["choices"][0]["message"]["content"]
-    import re
-    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
-    
-    return content
-
+    return response.json()["choices"][0]["message"]["content"]
 
 def filter_tables_and_notes(text: str) -> str:
     """
@@ -120,7 +117,6 @@ def filter_tables_and_notes(text: str) -> str:
             filtered_lines.append(line)
             
     return '\n'.join(filtered_lines).strip()
-
 
 def save_markdown_to_excel(md_text: str, excel_path: Path) -> None:
     lines = md_text.splitlines()
