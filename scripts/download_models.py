@@ -13,12 +13,10 @@ except ImportError:
 
 
 # Model configuration
-VISION_MODEL = "deepseek-ai/DeepSeek-OCR"
-TEXT_MODEL = "google/gemma-3-4b-it"  # Using 4B variant for best quality
+TEXT_MODEL = "Qwen/Qwen2.5-32B-Instruct-AWQ"
 
 # Directories
 BASE_DIR = Path(__file__).parent.parent
-VISION_DIR = BASE_DIR / "models" / "vision"
 TEXT_DIR = BASE_DIR / "models" / "text"
 
 
@@ -29,24 +27,17 @@ def get_hf_token() -> str:
         return token
 
     print("\n" + "=" * 60)
-    print("  Hugging Face Token Required")
+    print("  Hugging Face Token Required (or Recommended)")
     print("=" * 60)
     print()
-    print("  Your token MUST have access to these models:")
-    print("    - google/gemma-3-4b-it  (Gemma 3 4B — gated model)")
-    print("    - deepseek-ai/DeepSeek-OCR")
-    print()
-    print("  Request Gemma 3 4B access at:")
-    print("    https://huggingface.co/google/gemma-3-4b-it")
+    print("  Your token is used to download:")
+    print("    - Qwen/Qwen2.5-32B-Instruct-AWQ (Open weights, token recommended for rate limits)")
     print()
     print("  Generate / find your token at:")
     print("    https://huggingface.co/settings/tokens")
     print("=" * 60 + "\n")
 
-    token = input("Enter your Hugging Face token (hf_...): ").strip()
-    if not token:
-        print("\nERROR: A valid HF token is required to download gated models.")
-        sys.exit(1)
+    token = input("Enter your Hugging Face token (hf_...) or press Enter to skip: ").strip()
     return token
 
 
@@ -68,7 +59,8 @@ def verify_and_repair_model(model_name: str, target_dir: Path, token: str) -> bo
     print(f"\n  Verifying files for: {model_name} ...")
 
     try:
-        expected_files = list(list_repo_files(repo_id=model_name, token=token))
+        # Pass token if provided, otherwise it might be None/empty string
+        expected_files = list(list_repo_files(repo_id=model_name, token=token if token else None))
     except Exception as exc:
         print(f"  WARNING: Could not fetch file list from HF Hub: {exc}")
         print("  Skipping deep verification.")
@@ -91,7 +83,7 @@ def verify_and_repair_model(model_name: str, target_dir: Path, token: str) -> bo
             local_dir=str(target_dir),
             local_dir_use_symlinks=False,
             resume_download=True,
-            token=token,
+            token=token if token else None,
         )
         print(f"  ✓ Re-download complete for {model_name}")
 
@@ -125,7 +117,7 @@ def download_model(model_name: str, target_dir: Path, token: str) -> None:
             local_dir=str(target_dir),
             local_dir_use_symlinks=False,
             resume_download=True,
-            token=token,
+            token=token if token else None,
         )
         print(f"\n  ✓ Successfully downloaded {model_name}\n")
     except Exception as exc:
@@ -140,15 +132,6 @@ def main():
     print("=" * 60 + "\n")
 
     token = get_hf_token()
-
-    # ── Vision model ──────────────────────────────────────────────
-    if is_model_downloaded(VISION_DIR):
-        print(f"✓ Vision model already present: {VISION_DIR}")
-    else:
-        print("✗ Vision model not found — downloading ...")
-        download_model(VISION_MODEL, VISION_DIR, token)
-
-    verify_and_repair_model(VISION_MODEL, VISION_DIR, token)
 
     # ── Text model ────────────────────────────────────────────────
     if is_model_downloaded(TEXT_DIR):
