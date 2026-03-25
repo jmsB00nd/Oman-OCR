@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 from typing import List
 
-import fitz
 import pandas as pd
 import requests
 import pytesseract
