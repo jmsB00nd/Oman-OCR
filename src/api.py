@@ -70,12 +70,15 @@ def process_image_with_tesseract(image_path: Path) -> str:
 def structure_text_with_llm(raw_text: str) -> str:
     """Uses the LLM to structure the messy OCR output into Markdown tables."""
     system_prompt = (
-        "You are an expert financial data extraction AI. You will receive raw, messy OCR text "
-        "extracted from a financial document containing Arabic and English. "
-        "Your task is to reconstruct this text into a clean, logical Markdown format. "
-        "Pay extreme attention to financial data: format any numerical data, ledgers, or sheets "
-        "into strict Markdown tables. Do not hallucinate numbers or text that are not present. "
-        "Fix minor OCR spelling errors, but keep the core financial figures exact."
+        "You are a specialized financial data extraction agent. "
+        "Your goal is to extract ONLY tables and supplemental financial notes from the provided OCR text. "
+        "\n\nSTRICT RULES:\n"
+        "1. TABLES: Reconstruct all financial grids, ledgers, or balance sheets into clean Markdown tables.\n"
+        "2. NOTES: Extract paragraphs that provide context to the numbers (e.g., accounting policies, "
+        "explanations of line items, or legal disclosures). These may NOT always start with numbers like (1) or [1].\n"
+        "3. EXCLUDE: Do not include headers, footers, page numbers, or decorative text.\n"
+        "4. LANGUAGE: Maintain the original Arabic and English text as found in the document.\n"
+        "5. NO HALLUCINATION: If a value is unreadable, use '---'. Do not invent figures."
     )
     
     response = requests.post(
@@ -86,7 +89,7 @@ def structure_text_with_llm(raw_text: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Structure this OCR output into Markdown:\n\n{raw_text}"}
             ],
-            "temperature": 0.1, # Low temperature for factual consistency
+            "temperature": 0.0, # Low temperature for factual consistency
         },
         timeout=120, # Formatting tables might take a bit longer
     )
@@ -95,27 +98,25 @@ def structure_text_with_llm(raw_text: str) -> str:
 
 
 def filter_tables_and_notes(text: str) -> str:
+    """
+    Cleans the LLM output to ensure only the Markdown content is passed to Excel.
+    This version is more permissive to capture notes that don't start with digits.
+    """
     if not text:
         return ""
+        
+    lines = text.splitlines()
     filtered_lines = []
-    note_pattern = re.compile(r'^\s*(\(\d+\)|\[\d+\])\s+')
-    in_note_block = False
-
-    for line in text.splitlines():
+    
+    for line in lines:
         stripped = line.strip()
+        # Keep table rows
         if stripped.startswith('|'):
             filtered_lines.append(line)
-            in_note_block = False
-        elif note_pattern.match(stripped):
-            if filtered_lines and filtered_lines[-1].strip() != "":
-                filtered_lines.append("") 
+        # Keep non-empty lines that aren't markdown artifacts (like ``` or headers)
+        elif stripped and not stripped.startswith('#') and not stripped.startswith('```'):
             filtered_lines.append(line)
-            in_note_block = True
-        elif in_note_block and stripped != "":
-            filtered_lines.append(line)
-        elif stripped == "":
-            in_note_block = False
-
+            
     return '\n'.join(filtered_lines).strip()
 
 
@@ -168,13 +169,10 @@ def worker_loop() -> None:
         try:
             image_path = UPLOAD_DIR / filename
             
-            # 1. Extract with Tesseract
             raw_text = process_image_with_tesseract(image_path)
             
-            # 2. Structure with LLM
             corrected_text = structure_text_with_llm(raw_text)
             
-            # 3. Filter for Excel
             filtered_text = filter_tables_and_notes(corrected_text)
 
             image_path.with_name(f"{image_path.stem}_raw.md").write_text(raw_text, encoding="utf-8")
