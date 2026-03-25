@@ -70,15 +70,7 @@ def process_image_with_tesseract(image_path: Path) -> str:
 def structure_text_with_llm(raw_text: str) -> str:
     """Uses the LLM to structure the messy OCR output into Markdown tables."""
     system_prompt = (
-        "You are a specialized financial data extraction agent. "
-        "Your goal is to extract ONLY tables and supplemental financial notes from the provided OCR text. "
-        "\n\nSTRICT RULES:\n"
-        "1. TABLES: Reconstruct all financial grids, ledgers, or balance sheets into clean Markdown tables.\n"
-        "2. NOTES: Extract paragraphs that provide context to the numbers (e.g., accounting policies, "
-        "explanations of line items, or legal disclosures). These may NOT always start with numbers like (1) or [1].\n"
-        "3. EXCLUDE: Do not include headers, footers, page numbers, or decorative text.\n"
-        "4. LANGUAGE: Maintain the original Arabic and English text as found in the document.\n"
-        "5. NO HALLUCINATION: If a value is unreadable, use '---'. Do not invent figures."
+        " You are given OCR-extracted financial table text.\nFix the table:\nreconstruct rows and columns\ndetect headers\nremove noise\noutput clean markdown tables"
     )
     
     response = requests.post(
