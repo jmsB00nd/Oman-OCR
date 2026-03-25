@@ -13,6 +13,8 @@ from typing import List
 import fitz
 import pandas as pd
 import requests
+import pytesseract
+from PIL import Image
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,7 +35,6 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-VISION_URL = os.getenv("VISION_URL", "http://localhost:8000/v1/chat/completions")
 TEXT_URL = os.getenv("TEXT_URL", "http://localhost:8001/v1/chat/completions")
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
 WORKER_POLL_INTERVAL = 2
@@ -55,49 +56,39 @@ app.mount("/images", StaticFiles(directory=UPLOAD_DIR), name="images")
 
 
 # --- OCR Processing Functions ---
-def process_image_with_vision(image_path: Path) -> str:
-    with open(image_path, "rb") as f:
-        img_b64 = base64.b64encode(f.read()).decode("utf-8")
+def process_image_with_tesseract(image_path: Path) -> str:
+    """Uses Tesseract to extract raw text, supporting English and Arabic."""
+    try:
+        img = Image.open(image_path)
+        # Using both Arabic and English. Tesseract will attempt to detect both.
+        text = pytesseract.image_to_string(img, lang='ara+eng')
+        return text
+    except Exception as e:
+        logger.error(f"Tesseract extraction failed: {e}")
+        raise
 
-    response = requests.post(
-        VISION_URL,
-        json={
-            "model": "/models/vision",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                        {"type": "text", "text": "Free OCR."},
-                    ],
-                }
-            ],
-            "max_tokens": 1024,
-            "temperature": 0.0,
-        },
-        timeout=120,
+def structure_text_with_llm(raw_text: str) -> str:
+    """Uses the LLM to structure the messy OCR output into Markdown tables."""
+    system_prompt = (
+        "You are an expert financial data extraction AI. You will receive raw, messy OCR text "
+        "extracted from a financial document containing Arabic and English. "
+        "Your task is to reconstruct this text into a clean, logical Markdown format. "
+        "Pay extreme attention to financial data: format any numerical data, ledgers, or sheets "
+        "into strict Markdown tables. Do not hallucinate numbers or text that are not present. "
+        "Fix minor OCR spelling errors, but keep the core financial figures exact."
     )
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
-
-
-def correct_text_with_llm(raw_text: str) -> str:
+    
     response = requests.post(
         TEXT_URL,
         json={
             "model": "/models/text",
             "messages": [
-                {
-                    "role": "user",
-                    "content": (
-                        "Fix OCR errors in this text but DO NOT alter the Markdown table structure. "
-                        "Keep all '|' delimiters exactly where they are."
-                        f"{raw_text}"
-                    ),
-                }
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Structure this OCR output into Markdown:\n\n{raw_text}"}
             ],
+            "temperature": 0.1, # Low temperature for factual consistency
         },
-        timeout=60,
+        timeout=120, # Formatting tables might take a bit longer
     )
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
@@ -176,15 +167,21 @@ def worker_loop() -> None:
 
         try:
             image_path = UPLOAD_DIR / filename
-            raw_text = process_image_with_vision(image_path)
-            filtered_text = filter_tables_and_notes(raw_text)
-            corrected_text = correct_text_with_llm(filtered_text)
+            
+            # 1. Extract with Tesseract
+            raw_text = process_image_with_tesseract(image_path)
+            
+            # 2. Structure with LLM
+            corrected_text = structure_text_with_llm(raw_text)
+            
+            # 3. Filter for Excel
+            filtered_text = filter_tables_and_notes(corrected_text)
 
             image_path.with_name(f"{image_path.stem}_raw.md").write_text(raw_text, encoding="utf-8")
             image_path.with_suffix(".md").write_text(corrected_text, encoding="utf-8")
             save_markdown_to_excel(filtered_text, image_path.with_suffix(".xlsx"))
 
-            update_job(job_id, JobStatus.COMPLETED, filtered_text, corrected_text)
+            update_job(job_id, JobStatus.COMPLETED, raw_text, corrected_text)
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}")
             update_job(job_id, f"{JobStatus.FAILED}: {str(e)}")

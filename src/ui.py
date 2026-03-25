@@ -19,7 +19,7 @@ LANGUAGES = {"en": "🇬🇧 English", "ar": "🇸🇦 العربية"}
 TRANSLATIONS = {
     "en": {
         "title": "Arabic OCR System",
-        "subtitle": "Extract and correct Arabic text from document images",
+        "subtitle": "Extract and structure Arabic text from document images",
         "upload_header": "Upload Documents",
         "upload_description": "Upload images containing Arabic text for OCR processing.",
         "upload_instructions": "Supported formats: PDF, PNG, JPG, JPEG, TIFF, BMP",
@@ -37,18 +37,18 @@ TRANSLATIONS = {
         "no_completed": "No completed jobs yet",
         "current_session": "Completed Results",
         "processing_queue": "Processing Queue",
-        "unprocessed_text": "⚠️ Raw VLM Output",
-        "ai_powered": "✨ AI-Corrected",
-        "corrected": "Corrected Text",
+        "unprocessed_text": "⚠️ Raw OCR Output",
+        "ai_powered": "✨ Structured Data",
+        "corrected": "Structured Text",
         "comparison_view": "🔍 Comparison",
         "file": "File",
         "created": "Created",
         "status": "Status",
         "download_raw": "📥 Download Raw",
         "download_excel": "📥 Download Excel",
-        "download_text": "📥 Download Corrected",
+        "download_text": "📥 Download Structured",
         "download_report": "📥 Download Report",
-        "no_corrected": "No corrected text available.",
+        "no_corrected": "No structured text available.",
         "clear_results": "🗑️ Clear All",
         "new_session": "Session cleared!",
         "queued_success": "✅ Queued files for processing.",
@@ -56,7 +56,7 @@ TRANSLATIONS = {
     },
     "ar": {
         "title": "نظام التعرف الضوئي على النصوص العربية",
-        "subtitle": "استخراج وتصحيح النصوص العربية من صور المستندات",
+        "subtitle": "استخراج وهيكلة النصوص العربية من صور المستندات",
         "upload_header": "تحميل المستندات",
         "upload_description": "قم بتحميل الصور.",
         "upload_instructions": "الصيغ المدعومة: PDF, PNG, JPG, JPEG, TIFF, BMP",
@@ -74,18 +74,18 @@ TRANSLATIONS = {
         "no_completed": "لا توجد مهام مكتملة بعد",
         "current_session": "النتائج المكتملة",
         "processing_queue": "قائمة المعالجة",
-        "unprocessed_text": "⚠️ نص خام",
-        "ai_powered": "✨ مصحح بالذكاء الاصطناعي",
-        "corrected": "النص المصحح",
+        "unprocessed_text": "⚠️ نص التعرف الضوئي الخام",
+        "ai_powered": "✨ بيانات منظمة",
+        "corrected": "النص المنظم",
         "comparison_view": "🔍 المقارنة",
         "file": "الملف",
         "created": "تاريخ الإنشاء",
         "status": "الحالة",
         "download_raw": "📥 تحميل الخام",
         "download_excel": "📥 تحميل إكسيل",
-        "download_text": "📥 تحميل المصحح",
+        "download_text": "📥 تحميل المنظم",
         "download_report": "📥 تحميل التقرير",
-        "no_corrected": "لا يوجد نص مصحح.",
+        "no_corrected": "لا توجد بيانات منظمة.",
         "clear_results": "🗑️ مسح الكل",
         "new_session": "تم مسح الجلسة!",
         "queued_success": "✅ تمت إضافة الملفات للمعالجة.",
@@ -259,14 +259,13 @@ def render_results_section(jobs: list) -> None:
                 st.markdown(f'<div style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:0.5rem 1rem;border-radius:20px;display:inline-block;margin-bottom:1rem;font-weight:600;">{t("ai_powered")}</div>', unsafe_allow_html=True)
                 if corrected_text:
                     with st.container(height=400): st.markdown(corrected_text)
-                    st.download_button(t("download_text"), data=corrected_text, file_name=f"{Path(job['filename']).stem}_corrected.txt", key=f"dl_corr_{job['id']}", use_container_width=True)
+                    st.download_button(t("download_text"), data=corrected_text, file_name=f"{Path(job['filename']).stem}_structured.txt", key=f"dl_corr_{job['id']}", use_container_width=True)
                 else:
                     st.warning(t("no_corrected"))
             with tab_compare:
                 if raw_text and corrected_text:
                     sim = calculate_similarity(raw_text, corrected_text)
                     
-                    # --- RESTORED COMPARISON LOGIC ---
                     # Character-level diff
                     char_diff = list(difflib.ndiff(raw_text, corrected_text))
                     diff_html_parts = []
@@ -324,7 +323,6 @@ def render_results_section(jobs: list) -> None:
                                 st.write(f"**{t('position')} {wd['pos']}:** `{wd['raw']}` → `{wd['corrected']}`")
                             if len(word_diffs) > 10:
                                 st.write(f"… and {len(word_diffs) - 10} more")
-                    # ---------------------------------------------
                 else:
                     st.warning("Comparison requires both texts.")
 

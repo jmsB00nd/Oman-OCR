@@ -3,6 +3,10 @@ FROM python:3.10-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-ara \
+    libtesseract-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv /opt/venv
@@ -23,6 +27,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-ara \
+    libtesseract-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

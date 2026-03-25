@@ -12,37 +12,6 @@ services:
     profiles:
       - setup
 
-  # --- Vision Model Service ---
-  vision-engine:
-    image: vllm/vllm-openai:latest
-    container_name: ocr-vision-engine
-    command: >
-      --model /models/vision
-      --gpu-memory-utilization 0.35
-      --port 8000
-      --max-model-len 2048
-      --trust-remote-code
-    volumes:
-      - ./models/vision:/models/vision:ro
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    ports:
-      - "8000:8000" # Vision Engine Port
-    networks:
-      - ocr-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 180s
-
   # --- Text Model Service ---
   text-engine:
     image: vllm/vllm-openai:latest
@@ -84,7 +53,6 @@ services:
     env_file:
       - .env
     environment:
-      - VISION_URL=http://vision-engine:8000/v1/chat/completions
       - TEXT_URL=http://text-engine:8001/v1/chat/completions
       - DB_PATH=/data/jobs.db
       - UPLOAD_DIR=/data/uploads
@@ -95,8 +63,6 @@ services:
     networks:
       - ocr-network
     depends_on:
-      vision-engine:
-        condition: service_healthy
       text-engine:
         condition: service_healthy
     restart: unless-stopped
