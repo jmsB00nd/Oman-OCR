@@ -15,6 +15,7 @@ import pandas as pd
 import requests
 import pytesseract
 from PIL import Image
+from pdf2image import convert_from_bytes
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -194,12 +195,16 @@ async def upload_files(files: List[UploadFile] = File(...)):
         file_dir.mkdir(parents=True, exist_ok=True)
         
         if f.filename.lower().endswith(".pdf"):
-            pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
-            for page_num in range(len(pdf_doc)):
-                page = pdf_doc.load_page(page_num)
-                pix = page.get_pixmap(dpi=300)
+            # Use pdf2image to convert PDF bytes to PIL Images at 300 DPI
+            pages = convert_from_bytes(file_bytes, dpi=300)
+            
+            for page_num, page_image in enumerate(pages):
                 img_name = f"{file_stem}_page_{page_num + 1}.jpg"
-                pix.save(str(file_dir / img_name))
+                img_path = str(file_dir / img_name)
+                
+                # Save the PIL image to disk for the worker to pick up
+                page_image.save(img_path, "JPEG")
+                
                 add_job(f"{file_stem}/{img_name}")
                 queued += 1
         else:

@@ -15,6 +15,16 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
+# Check if Poppler is available (required for pdf2image)
+if ! command -v pdftoppm &> /dev/null; then
+    echo "WARNING: 'poppler-utils' is not installed on your system."
+    echo "PDF processing will fail locally."
+    echo "Ubuntu/Debian: sudo apt-get install poppler-utils"
+    echo "Mac: brew install poppler"
+    echo ""
+    read -p "Press enter to continue anyway or Ctrl+C to abort..."
+fi
+
 # Install Python dependencies for model download
 echo "Installing dependencies..."
 pip install -q --upgrade pip
