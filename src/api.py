@@ -71,16 +71,15 @@ def process_image_with_tesseract(image_path: Path) -> str:
 def structure_text_with_llm(raw_text: str) -> str:
     """Uses the LLM to extract only tables and relevant financial notes."""
     system_prompt = (
-        "You are a specialized financial data extraction agent. "
-        "Your goal is to extract ONLY tables and their associated footnotes/supplemental notes."
-        "\n\nSTRICT EXTRACTION RULES:\n"
-        "1. TABLES: Reconstruct all tables into clean Markdown tables.\n"
-        "2. LINKED NOTES: Identify reference markers in the table (e.g., '(1)', '*', '[a]') and find their definitions "
-        "in the text. Extract these definitions immediately below the table.\n"
-        "3. EXCLUDE: Do not include headers, footers, page numbers, or decorative text.\n"
-        "4. LANGUAGE: Maintain the original Arabic and English text as found in the document.\n"
-        "5. NO HALLUCINATION: If a value is unreadable, use '---'. Do not invent figures."
-    )
+    "You are a specialized financial data extraction agent. "
+    "Your goal is to extract ONLY financial tables and their associated footnotes. "
+    "\n\nSTRICT FORMATTING RULES:\n"
+    "1. NO MARKDOWN BLOCKS: Do not wrap your response in ```markdown or ``` tags. Output RAW text only.\n"
+    "2. TABLES: Reconstruct all financial grids into clean Markdown tables.\n"
+    "3. LINKED NOTES: Identify reference markers (e.g., '(1)', '*') and extract their definitions below the table.\n"
+    "4. EXCLUSIONS: Do not include 'Notes:' headers if no notes exist. Do not include page numbers or metadata[cite: 3, 15].\n"
+    "5. NO HALLUCINATION: If a value is unreadable, use '---'[cite: 3]. Never guess figures."
+)
     
     response = requests.post(
         TEXT_URL,
