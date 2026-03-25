@@ -69,8 +69,12 @@ def process_image_with_tesseract(image_path: Path) -> str:
 
 def structure_text_with_llm(raw_text: str) -> str:
     """Uses the LLM to structure the messy OCR output into Markdown tables."""
+    # 1. Make the prompt extremely strict about output format
     system_prompt = (
-        " You are given OCR-extracted financial table text.\nFix the table:\nreconstruct rows and columns\ndetect headers\nremove noise\noutput clean markdown tables"
+        "You are an expert data extraction bot. You are given OCR-extracted financial table text. "
+        "Fix the table by reconstructing rows and columns, detecting headers, and removing noise. "
+        "CRITICAL: Output ONLY the raw Markdown table. Do NOT include any introductory text, explanations, or thinking processes. "
+        "Do not say 'Here is the table' or explain your reasoning."
     )
     
     response = requests.post(
@@ -81,12 +85,19 @@ def structure_text_with_llm(raw_text: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Structure this OCR output into Markdown:\n\n{raw_text}"}
             ],
-            "temperature": 0.0, # Low temperature for factual consistency
+            "temperature": 0.0,
+            "max_tokens": 2048, # 2. Give it plenty of room to output a large table
         },
-        timeout=120, # Formatting tables might take a bit longer
+        timeout=120,
     )
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    
+    # 3. (Optional) Strip out reasoning tags just in case it uses them anyway
+    content = response.json()["choices"][0]["message"]["content"]
+    import re
+    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+    
+    return content
 
 
 def filter_tables_and_notes(text: str) -> str:
