@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import difflib
 
 from database import (
     JobStatus,
@@ -223,8 +224,46 @@ async def upload_files(files: List[UploadFile] = File(...)):
 
 @app.get("/jobs")
 def fetch_jobs():
-    """Returns all jobs as dictionaries."""
-    return [dict(row) for row in get_all_jobs()]
+    """Returns all jobs as dictionaries, including text comparison metrics."""
+    jobs = []
+    
+    for row in get_all_jobs():
+        job_dict = dict(row)
+        
+        # Initialize default metrics
+        metrics = {
+            "similarity": 0.0,
+            "changes": 0,
+            "change_ratio": 0.0
+        }
+        
+        raw_text = job_dict.get("raw_text") or ""
+        corrected_text = job_dict.get("corrected_text") or ""
+        
+        # Calculate metrics if both texts are available
+        if raw_text and corrected_text:
+            # Calculate Similarity
+            sim = difflib.SequenceMatcher(None, raw_text, corrected_text).ratio() * 100
+            
+            # Calculate Changes
+            char_diff = list(difflib.ndiff(raw_text, corrected_text))
+            changes_count = sum(1 for d in char_diff if d.startswith("+ ") or d.startswith("- "))
+            
+            # Calculate Change Ratio
+            change_ratio = abs(len(corrected_text) - len(raw_text)) / max(len(raw_text), 1)
+            
+            # Update metrics object with rounded values
+            metrics = {
+                "similarity": round(sim, 2),
+                "changes": changes_count,
+                "change_ratio": round(change_ratio, 4)
+            }
+            
+        # Attach metrics to the job
+        job_dict["metrics"] = metrics
+        jobs.append(job_dict)
+        
+    return jobs
 
 
 @app.post("/clear")
