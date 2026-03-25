@@ -86,7 +86,6 @@ def structure_text_with_llm(raw_text: str) -> str:
                 {"role": "user", "content": f"Structure this OCR output into Markdown:\n\n{raw_text}"}
             ],
             "temperature": 0.0,
-            "max_tokens": 2048, # 2. Give it plenty of room to output a large table
         },
         timeout=120,
     )
