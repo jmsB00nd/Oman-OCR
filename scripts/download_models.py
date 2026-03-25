@@ -13,12 +13,10 @@ except ImportError:
 
 
 # Model configuration
-VISION_MODEL = "deepseek-ai/DeepSeek-OCR"
-TEXT_MODEL = "google/gemma-3-4b-it"  # Using 4B variant for best quality
+TEXT_MODEL = "Qwen/Qwen3.5-9B" 
 
 # Directories
 BASE_DIR = Path(__file__).parent.parent
-VISION_DIR = BASE_DIR / "models" / "vision"
 TEXT_DIR = BASE_DIR / "models" / "text"
 
 
@@ -29,24 +27,18 @@ def get_hf_token() -> str:
         return token
 
     print("\n" + "=" * 60)
-    print("  Hugging Face Token Required")
+    print("  Hugging Face Token Required (Optional for non-gated)")
     print("=" * 60)
     print()
-    print("  Your token MUST have access to these models:")
-    print("    - google/gemma-3-4b-it  (Gemma 3 4B — gated model)")
-    print("    - deepseek-ai/DeepSeek-OCR")
-    print()
-    print("  Request Gemma 3 4B access at:")
-    print("    https://huggingface.co/google/gemma-3-4b-it")
+    print("  Downloading:")
+    print(f"    - {TEXT_MODEL}")
     print()
     print("  Generate / find your token at:")
     print("    https://huggingface.co/settings/tokens")
     print("=" * 60 + "\n")
 
-    token = input("Enter your Hugging Face token (hf_...): ").strip()
-    if not token:
-        print("\nERROR: A valid HF token is required to download gated models.")
-        sys.exit(1)
+    # While Qwen 3.5 9B isn't gated, having a token helps avoid rate limits
+    token = input("Enter your Hugging Face token (hf_...) or press Enter to skip: ").strip()
     return token
 
 
@@ -68,7 +60,11 @@ def verify_and_repair_model(model_name: str, target_dir: Path, token: str) -> bo
     print(f"\n  Verifying files for: {model_name} ...")
 
     try:
-        expected_files = list(list_repo_files(repo_id=model_name, token=token))
+        # Pass token only if it exists
+        kwargs = {"repo_id": model_name}
+        if token: kwargs["token"] = token
+        
+        expected_files = list(list_repo_files(**kwargs))
     except Exception as exc:
         print(f"  WARNING: Could not fetch file list from HF Hub: {exc}")
         print("  Skipping deep verification.")
@@ -86,13 +82,15 @@ def verify_and_repair_model(model_name: str, target_dir: Path, token: str) -> bo
 
     print(f"\n  Re-downloading missing files for {model_name} ...")
     try:
-        snapshot_download(
-            repo_id=model_name,
-            local_dir=str(target_dir),
-            local_dir_use_symlinks=False,
-            resume_download=True,
-            token=token,
-        )
+        download_kwargs = {
+            "repo_id": model_name,
+            "local_dir": str(target_dir),
+            "local_dir_use_symlinks": False,
+            "resume_download": True
+        }
+        if token: download_kwargs["token"] = token
+            
+        snapshot_download(**download_kwargs)
         print(f"  ✓ Re-download complete for {model_name}")
 
         # Final check after repair
@@ -120,13 +118,15 @@ def download_model(model_name: str, target_dir: Path, token: str) -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        snapshot_download(
-            repo_id=model_name,
-            local_dir=str(target_dir),
-            local_dir_use_symlinks=False,
-            resume_download=True,
-            token=token,
-        )
+        download_kwargs = {
+            "repo_id": model_name,
+            "local_dir": str(target_dir),
+            "local_dir_use_symlinks": False,
+            "resume_download": True
+        }
+        if token: download_kwargs["token"] = token
+            
+        snapshot_download(**download_kwargs)
         print(f"\n  ✓ Successfully downloaded {model_name}\n")
     except Exception as exc:
         print(f"\n  ✗ Failed to download {model_name}: {exc}\n")
@@ -140,15 +140,6 @@ def main():
     print("=" * 60 + "\n")
 
     token = get_hf_token()
-
-    # ── Vision model ──────────────────────────────────────────────
-    if is_model_downloaded(VISION_DIR):
-        print(f"✓ Vision model already present: {VISION_DIR}")
-    else:
-        print("✗ Vision model not found — downloading ...")
-        download_model(VISION_MODEL, VISION_DIR, token)
-
-    verify_and_repair_model(VISION_MODEL, VISION_DIR, token)
 
     # ── Text model ────────────────────────────────────────────────
     if is_model_downloaded(TEXT_DIR):

@@ -18,9 +18,9 @@ services:
     container_name: ocr-text-engine
     command: >
       --model /models/text
-      --gpu-memory-utilization 0.35
+      --gpu-memory-utilization 0.85
       --port 8001
-      --max-model-len 2048
+      --max-model-len 4096
       --trust-remote-code
     volumes:
       - ./models/text:/models/text:ro
