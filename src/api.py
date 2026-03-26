@@ -220,6 +220,102 @@ async def upload_files(files: List[UploadFile] = File(...)):
             
     return {"queued": queued}
 
+def markdown_to_json(md_text: str) -> dict:
+    """Parses a Markdown table and notes into a structured JSON dictionary."""
+    if not md_text:
+        return {"table": [], "notes": ""}
+        
+    lines = md_text.splitlines()
+    table_data = []
+    notes = []
+    headers = []
+    
+    for line in lines:
+        stripped = line.strip()
+        if not stripped: 
+            continue
+            
+        if stripped.startswith('|'):
+            # Skip Markdown separator lines like |---|---|
+            if re.match(r'^\|[\-\s\|]+\|$', stripped) or re.match(r'^\|[\-\s\|]+$', stripped):
+                continue
+                
+            # Extract row values
+            row_vals = [col.strip() for col in stripped.split('|')]
+            row_vals = row_vals[1:-1] if stripped.endswith('|') else row_vals[1:]
+            
+            if not headers:
+                # First valid row becomes our dictionary keys
+                headers = row_vals
+            else:
+                # Map row values to the header keys
+                row_dict = {}
+                for i, val in enumerate(row_vals):
+                    key = headers[i] if i < len(headers) else f"Column_{i+1}"
+                    row_dict[key] = val
+                table_data.append(row_dict)
+        else:
+            # Keep anything outside the table as notes
+            notes.append(stripped)
+            
+    return {
+        "table": table_data,
+        "notes": "\n".join(notes)
+    }
+    
+
+@app.get("/jobs/structured")
+def fetch_jobs_structured():
+    """
+    Returns jobs formatted as structured JSON arrays instead of Markdown strings,
+    and removes the raw_text from the response. Ideal for external API consumption.
+    """
+    jobs = []
+    
+    for row in get_all_jobs():
+        job_dict = dict(row)
+        
+        # 1. Initialize default metrics
+        metrics = {
+            "similarity": 0.0,
+            "changes": 0,
+            "change_ratio": 0.0
+        }
+        
+        raw_text = job_dict.get("raw_text") or ""
+        corrected_text = job_dict.get("corrected_text") or ""
+        
+        # 2. Calculate metrics using the raw text BEFORE removing it
+        if raw_text and corrected_text:
+            sim = difflib.SequenceMatcher(None, raw_text, corrected_text).ratio() * 100
+            
+            char_diff = list(difflib.ndiff(raw_text, corrected_text))
+            changes_count = sum(1 for d in char_diff if d.startswith("+ ") or d.startswith("- "))
+            
+            change_ratio = abs(len(corrected_text) - len(raw_text)) / max(len(raw_text), 1)
+            
+            metrics = {
+                "similarity": round(sim, 2),
+                "changes": changes_count,
+                "change_ratio": round(change_ratio, 4)
+            }
+            
+        job_dict["metrics"] = metrics
+        
+        # 3. Parse the markdown into a JSON structure
+        parsed_data = markdown_to_json(corrected_text)
+        
+        # 4. Replace the markdown string with the JSON array & notes
+        job_dict["corrected_text"] = parsed_data["table"]
+        job_dict["notes"] = parsed_data["notes"]
+        
+        # 5. Remove raw_text from the final dictionary
+        job_dict.pop("raw_text", None)
+        
+        jobs.append(job_dict)
+        
+    return jobs
+
 
 @app.get("/jobs")
 def fetch_jobs():
