@@ -223,7 +223,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
 def markdown_to_json(md_text: str) -> dict:
     """Parses a Markdown table and notes into a structured JSON dictionary."""
     if not md_text:
-        return {"table": [], "notes": ""}
+        return {"table": [], "notes": []} # Changed default to empty list
         
     lines = md_text.splitlines()
     table_data = []
@@ -255,12 +255,26 @@ def markdown_to_json(md_text: str) -> dict:
                     row_dict[key] = val
                 table_data.append(row_dict)
         else:
-            # Keep anything outside the table as notes
-            notes.append(stripped)
+            # Clean up and normalize notes
+            cleaned_note = stripped
             
+            # Skip standalone header lines like "### Notes:" or "Notes:"
+            if re.match(r'^#+\s*Notes?:?\s*$', cleaned_note, re.IGNORECASE) or cleaned_note.lower() in ['notes:', 'notes']:
+                continue
+                
+            # Remove leading bullet points (- or *)
+            cleaned_note = re.sub(r'^[-*]\s+', '', cleaned_note)
+            
+            # Remove markdown bolding formatting (e.g., **Note 1** -> Note 1)
+            cleaned_note = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned_note)
+            
+            # Add to the list if the line isn't empty after cleaning
+            if cleaned_note:
+                notes.append(cleaned_note)
+                
     return {
         "table": table_data,
-        "notes": "\n".join(notes)
+        "notes": notes  # Now returning the list directly
     }
     
 
