@@ -69,16 +69,15 @@ def process_image_with_tesseract(image_path: Path) -> str:
         raise
 
 def structure_text_with_llm(raw_text: str) -> str:
-    """Uses the LLM to extract only tables and relevant financial notes."""
+    """Uses the LLM strictly to extract and format the financial table."""
     system_prompt = (
-        "You are an expert financial data extraction AI. "
-        "Your sole task is to extract financial tables and ONLY explicitly linked footnotes from the provided OCR text. "
-        "You will be penalized for skipping data or inventing information.\n\n"
-        "STRICT EXTRACTION RULES:\n"
-        "1. COMPLETE COLUMNS (CRITICAL): You MUST extract every single column present in the raw text. Do not skip, merge, or drop columns under any circumstances. If a column exists in the source, it must exist in your output table. Preserve the exact grid structure.\n"
-        "2. STRICT LINKED NOTES ONLY: Extract footnotes ONLY if there is a specific reference marker (e.g., '(1)', '[a]', '*') inside the table that directly links to a note definition below it. If there are no explicit marker references in the table, DO NOT output any notes and DO NOT generate a 'Notes:' header.\n"
-        "3. NO HALLUCINATION: Never invent figures, columns, or notes. If a cell value is empty or unreadable, use '---' or leave it blank.\n"
-        "4. RAW OUTPUT: Output RAW markdown tables only. DO NOT wrap your response in ```markdown or ``` tags. Do not include introductory text, page numbers, or metadata."
+        "You are a specialized data extraction assistant. "
+        "Your ONLY task is to extract the financial grid from the text and format it as a clean Markdown table. "
+        "\n\nSTRICT RULES:\n"
+        "1. TABLE ONLY: Do not output any notes, introductory text, explanations, or footnotes.\n"
+        "2. COMPLETE COLUMNS: You must include every column present in the source text. Do not drop or merge columns. If a cell is empty, use '---'.\n"
+        "3. PRESERVE HEADERS: Keep all headers and rows exactly as they appear.\n"
+        "4. FORMATTING: Output the raw Markdown table directly. DO NOT wrap the output in ```markdown or ``` tags."
     )
     
     response = requests.post(
@@ -87,36 +86,15 @@ def structure_text_with_llm(raw_text: str) -> str:
             "model": "/models/text",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Extract the financial tables and any strictly linked notes from this text:\n\n{raw_text}"}
+                {"role": "user", "content": f"Extract ONLY the financial table from this text:\n\n{raw_text}"}
             ],
-            "temperature": 0.0, # Keep at 0 for deterministic output
+            "temperature": 0.0,
         },
         timeout=120,
     )
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    return response.json()["choices"][0]["message"]["content"].strip()
 
-def filter_tables_and_notes(text: str) -> str:
-    """
-    Cleans the LLM output to ensure only the Markdown content is passed to Excel.
-    This version is more permissive to capture notes that don't start with digits.
-    """
-    if not text:
-        return ""
-        
-    lines = text.splitlines()
-    filtered_lines = []
-    
-    for line in lines:
-        stripped = line.strip()
-        # Keep table rows
-        if stripped.startswith('|'):
-            filtered_lines.append(line)
-        # Keep non-empty lines that aren't markdown artifacts (like ``` or headers)
-        elif stripped and not stripped.startswith('#') and not stripped.startswith('```'):
-            filtered_lines.append(line)
-            
-    return '\n'.join(filtered_lines).strip()
 
 def save_markdown_to_excel(md_text: str, excel_path: Path) -> None:
     lines = md_text.splitlines()
@@ -149,6 +127,69 @@ def save_markdown_to_excel(md_text: str, excel_path: Path) -> None:
                 pd.DataFrame(notes, columns=["Notes"]).to_excel(writer, sheet_name='Notes', index=False)
     except Exception as e:
         logger.error(f"Failed to generate Excel: {e}")
+        
+
+def extract_linked_notes(raw_text: str, markdown_table: str) -> str:
+    """Extracts notes from raw text based on reference markers found in the table."""
+    if not markdown_table:
+        return ""
+
+    # 1. Find all reference markers in the LLM-generated table
+    markers = set()
+    
+    # Look for (1), (2), etc.
+    paren_markers = re.findall(r'\((\d+)\)', markdown_table)
+    markers.update([f"({m})" for m in paren_markers])
+    
+    # Look for [1], [2], etc.
+    bracket_markers = re.findall(r'\[(\d+)\]', markdown_table)
+    markers.update([f"[{m}]" for m in bracket_markers])
+    
+    # Look for asterisks *, **, etc.
+    asterisk_markers = re.findall(r'(\*+)', markdown_table)
+    markers.update(asterisk_markers)
+
+    if not markers:
+        return "" # If the table has no markers, we extract no notes
+
+    # 2. Search the raw OCR text for lines that begin with these markers
+    extracted_notes = []
+    lines = raw_text.splitlines()
+    
+    capturing = False
+    current_note = []
+    
+    for line in lines:
+        stripped_line = line.strip()
+        if not stripped_line:
+            continue
+            
+        # Check if the line starts with one of our found markers
+        starts_with_marker = any(stripped_line.startswith(m) for m in markers)
+        
+        if starts_with_marker:
+            if current_note:
+                extracted_notes.append(" ".join(current_note))
+            current_note = [stripped_line]
+            capturing = True
+        elif capturing:
+            # Continue capturing the note if it spans multiple lines.
+            # Stop if we hit something that looks like a table row or a massive gap.
+            if re.match(r'^[\dA-Za-z]+\s*\|', stripped_line) or len(stripped_line) < 3:
+                capturing = False
+                if current_note:
+                    extracted_notes.append(" ".join(current_note))
+                current_note = []
+            else:
+                current_note.append(stripped_line)
+                
+    if current_note:
+        extracted_notes.append(" ".join(current_note))
+        
+    if extracted_notes:
+        return "\n\nLinked Notes:\n" + "\n".join(extracted_notes)
+        
+    return ""
 
 
 # --- Background Worker ---
@@ -169,13 +210,16 @@ def worker_loop() -> None:
             
             raw_text = process_image_with_tesseract(image_path)
             
-            corrected_text = structure_text_with_llm(raw_text)
+            table_only_md = structure_text_with_llm(raw_text)
             
-            filtered_text = filter_tables_and_notes(corrected_text)
+            notes_md = extract_linked_notes(raw_text, table_only_md)
+            
+            corrected_text = f"{table_only_md}\n{notes_md}".strip()
+            
 
             image_path.with_name(f"{image_path.stem}_raw.md").write_text(raw_text, encoding="utf-8")
             image_path.with_suffix(".md").write_text(corrected_text, encoding="utf-8")
-            save_markdown_to_excel(filtered_text, image_path.with_suffix(".xlsx"))
+            save_markdown_to_excel(corrected_text, image_path.with_suffix(".xlsx"))
 
             update_job(job_id, JobStatus.COMPLETED, raw_text, corrected_text)
         except Exception as e:
