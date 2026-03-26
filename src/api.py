@@ -75,13 +75,10 @@ def structure_text_with_llm(raw_text: str) -> str:
         "You are a professional document restoration expert. "
         "Your task is to transform noisy OCR text into a clean, perfectly formatted Markdown document. "
         "\n\nRECONSTRUCTION RULES:\n"
-        "1. FORMAT: Use standard Markdown. Use '#' for headers, '-' for lists, and '|' for tables.\n"
+        "1. FORMAT: Use standard Markdown."
         "2. TABLES: Convert all financial grids into Markdown tables. Ensure headers are correctly identified. "
-        "If a table is split across pages in the raw text, merge it into a single continuous table.\n"
-        "3. PROSE: Keep all standard text and paragraphs. Fix obvious OCR typos (e.g., 'Arnual' -> 'Annual') but do not rewrite content.\n"
+        "3. Fix obvious OCR typos (e.g., 'Arnual' -> 'Annual') but do not rewrite content.\n"
         "4. NO WRAPPERS: Do not use ```markdown or ``` tags. Start your response immediately with the reconstructed content.\n"
-        "5. NOISE REMOVAL: Strip out artifacts like page numbers, running footers, or OCR 'garbage' characters.\n"
-        "6. DATA INTEGRITY: If a number is illegible, use '---'. Never hallucinate or guess financial figures."
     )
     
     user_content = (
