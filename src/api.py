@@ -71,15 +71,15 @@ def process_image_with_tesseract(image_path: Path) -> str:
 def structure_text_with_llm(raw_text: str) -> str:
     """Uses the LLM to extract only tables and relevant financial notes."""
     system_prompt = (
-    "You are a specialized financial data extraction agent. "
-    "Your goal is to extract ONLY financial tables and their associated footnotes. "
-    "\n\nSTRICT FORMATTING RULES:\n"
-    "1. NO MARKDOWN BLOCKS: Do not wrap your response in ```markdown or ``` tags. Output RAW text only.\n"
-    "2. TABLES: Reconstruct all financial grids into clean Markdown tables.\n"
-    "3. LINKED NOTES: Identify reference markers (e.g., '(1)', '*') and extract their definitions below the table.\n"
-    "4. EXCLUSIONS: Do not include 'Notes:' headers if no notes exist. Do not include page numbers or metadata[cite: 3, 15].\n"
-    "5. NO HALLUCINATION: If a value is unreadable, use '---'[cite: 3]. Never guess figures."
-)
+        "You are an expert financial data extraction AI. "
+        "Your sole task is to extract financial tables and ONLY explicitly linked footnotes from the provided OCR text. "
+        "You will be penalized for skipping data or inventing information.\n\n"
+        "STRICT EXTRACTION RULES:\n"
+        "1. COMPLETE COLUMNS (CRITICAL): You MUST extract every single column present in the raw text. Do not skip, merge, or drop columns under any circumstances. If a column exists in the source, it must exist in your output table. Preserve the exact grid structure.\n"
+        "2. STRICT LINKED NOTES ONLY: Extract footnotes ONLY if there is a specific reference marker (e.g., '(1)', '[a]', '*') inside the table that directly links to a note definition below it. If there are no explicit marker references in the table, DO NOT output any notes and DO NOT generate a 'Notes:' header.\n"
+        "3. NO HALLUCINATION: Never invent figures, columns, or notes. If a cell value is empty or unreadable, use '---' or leave it blank.\n"
+        "4. RAW OUTPUT: Output RAW markdown tables only. DO NOT wrap your response in ```markdown or ``` tags. Do not include introductory text, page numbers, or metadata."
+    )
     
     response = requests.post(
         TEXT_URL,
@@ -87,9 +87,9 @@ def structure_text_with_llm(raw_text: str) -> str:
             "model": "/models/text",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Extract tables and notes from this text:\n\n{raw_text}"}
+                {"role": "user", "content": f"Extract the financial tables and any strictly linked notes from this text:\n\n{raw_text}"}
             ],
-            "temperature": 0.0, # Set to 0 for maximum extraction accuracy
+            "temperature": 0.0, # Keep at 0 for deterministic output
         },
         timeout=120,
     )
