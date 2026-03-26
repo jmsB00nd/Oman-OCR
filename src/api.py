@@ -69,40 +69,32 @@ def process_image_with_tesseract(image_path: Path) -> str:
         raise
 
 def structure_text_with_llm(raw_text: str) -> str:
-    """Uses the LLM to reconstruct the full document into clean Markdown."""
-    
+    """Uses the LLM to extract only tables and relevant financial notes."""
     system_prompt = (
-        "You are a professional document restoration expert. "
-        "Your task is to transform noisy OCR text into a clean, perfectly formatted Markdown document. "
-        "\n\nRECONSTRUCTION RULES:\n"
-        "1. FORMAT: Use standard Markdown."
-        "2. TABLES: Convert all financial grids into Markdown tables. Ensure headers are correctly identified. "
-        "3. Fix obvious OCR typos (e.g., 'Arnual' -> 'Annual') but do not rewrite content.\n"
-        "4. NO WRAPPERS: Do not use ```markdown or ``` tags. Start your response immediately with the reconstructed content.\n"
-    )
+    "You are a specialized financial data extraction agent. "
+    "Your goal is to extract ONLY financial tables and their associated footnotes. "
+    "\n\nSTRICT FORMATTING RULES:\n"
+    "1. NO MARKDOWN BLOCKS: Do not wrap your response in ```markdown or ``` tags. Output RAW text only.\n"
+    "2. TABLES: Reconstruct all financial grids into clean Markdown tables.\n"
+    "3. LINKED NOTES: Identify reference markers (e.g., '(1)', '*') and extract their definitions below the table.\n"
+    "4. EXCLUSIONS: Do not include 'Notes:' headers if no notes exist. Do not include page numbers or metadata.\n"
+    "5. NO HALLUCINATION: If a value is unreadable, use '---' . Never guess figures."
+)
     
-    user_content = (
-        "The following is raw OCR text from a financial document. "
-        "Please reconstruct the entire document in Markdown format, ensuring all tables are perfectly aligned "
-        "and all headings are preserved:\n\n"
-        f"{raw_text}"
-    )
-
     response = requests.post(
         TEXT_URL,
         json={
             "model": "/models/text",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
+                {"role": "user", "content": f"This raw text is extracted using an OCR from a financial document\nFix the tables :\n- reconstruct rows and columns\n- detect headers\n- remove noise\n- output clean markdown tables :\n\n{raw_text}"}
             ],
-            "temperature": 0.0,
+            "temperature": 0.0, # Set to 0 for maximum extraction accuracy
         },
         timeout=120,
     )
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
-
 
 def filter_tables_and_notes(text: str) -> str:
     """
