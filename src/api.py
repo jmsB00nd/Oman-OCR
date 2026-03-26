@@ -78,7 +78,7 @@ def structure_text_with_llm(raw_text: str) -> str:
     "2. TABLES: Reconstruct all financial grids into clean Markdown tables.\n"
     "3. LINKED NOTES: Identify reference markers (e.g., '(1)', '*') and extract their definitions below the table.\n"
     "4. EXCLUSIONS: Do not include 'Notes:' headers if no notes exist. Do not include page numbers or metadata.\n"
-    "5. NO HALLUCINATION: If a value is unreadable, use '---' . Never guess figures."
+    "5. NO HALLUCINATION: If a value is unreadable, use '---'. Never guess figures."
 )
     
     response = requests.post(
@@ -87,7 +87,7 @@ def structure_text_with_llm(raw_text: str) -> str:
             "model": "/models/text",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"This raw text is extracted using an OCR from a financial document\nFix the tables :\n- reconstruct rows and columns\n- detect headers\n- remove noise\n- output clean markdown tables :\n\n{raw_text}"}
+                {"role": "user", "content": f"Extract tables and notes from this text:\n\n{raw_text}"}
             ],
             "temperature": 0.0, # Set to 0 for maximum extraction accuracy
         },
