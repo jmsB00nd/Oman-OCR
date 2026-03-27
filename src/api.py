@@ -71,7 +71,7 @@ def process_with_chandra(image_path: Path) -> str:
         str(image_path), 
         str(out_dir), 
         "--method", "vllm",
-        "--max-output-tokens", "4096"  # <--- Limit requested tokens to fit in VRAM
+        "--max-output-tokens", "8192"  
     ]
     
     try:
