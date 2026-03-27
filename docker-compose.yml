@@ -12,16 +12,18 @@ services:
     profiles:
       - setup
 
-  # --- Text Model Service ---
+  # --- Text/Vision Model Service (Chandra 2 via vLLM) ---
   text-engine:
     image: vllm/vllm-openai:latest
     container_name: ocr-text-engine
     command: >
       --model /models/text
-      --gpu-memory-utilization 0.9
+      --served-model-name chandra
+      --gpu-memory-utilization 0.90
       --port 8001
       --max-model-len 8192
       --trust-remote-code
+      --limit-mm-per-prompt image=1
     volumes:
       - ./models/text:/models/text:ro
     deploy:
@@ -43,7 +45,7 @@ services:
       retries: 3
       start_period: 180s
 
-  # --- NEW: FastAPI Backend Core ---
+  # --- FastAPI Backend Core ---
   backend:
     build:
       context: .
@@ -54,6 +56,8 @@ services:
       - .env
     environment:
       - TEXT_URL=http://text-engine:8001/v1/chat/completions
+      - VLLM_API_BASE=http://text-engine:8001/v1
+      - VLLM_MODEL_NAME=chandra
       - DB_PATH=/data/jobs.db
       - UPLOAD_DIR=/data/uploads
     volumes:
@@ -67,7 +71,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # --- NEW: Streamlit Frontend UI ---
+  # --- Streamlit Frontend UI ---
   frontend:
     build:
       context: .

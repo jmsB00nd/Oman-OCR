@@ -13,7 +13,7 @@ except ImportError:
 
 
 # Model configuration
-TEXT_MODEL = "Qwen/Qwen2.5-32B-Instruct-AWQ"
+TEXT_MODEL = "datalab-to/chandra-ocr-2"
 
 # Directories
 BASE_DIR = Path(__file__).parent.parent
@@ -31,7 +31,7 @@ def get_hf_token() -> str:
     print("=" * 60)
     print()
     print("  Your token is used to download:")
-    print("    - Qwen/Qwen2.5-32B-Instruct-AWQ (Open weights, token recommended for rate limits)")
+    print("    - datalab-to/chandra-ocr-2 (Open weights, token recommended for rate limits)")
     print()
     print("  Generate / find your token at:")
     print("    https://huggingface.co/settings/tokens")

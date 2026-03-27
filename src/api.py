@@ -1,10 +1,11 @@
-"""FastAPI Backend for Arabic Document Processor."""
+"""FastAPI Backend for Arabic Document Processor (Chandra OCR 2)."""
 
 import base64
 import logging
 import os
 import re
 import shutil
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -12,7 +13,6 @@ from typing import List
 
 import pandas as pd
 import requests
-import pytesseract
 from PIL import Image
 from pdf2image import convert_from_bytes
 from dotenv import load_dotenv
@@ -36,7 +36,6 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-TEXT_URL = os.getenv("TEXT_URL", "http://localhost:8001/v1/chat/completions")
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
 WORKER_POLL_INTERVAL = 2
 
@@ -56,49 +55,42 @@ app.add_middleware(
 app.mount("/images", StaticFiles(directory=UPLOAD_DIR), name="images")
 
 
-# --- OCR Processing Functions ---
-def process_image_with_tesseract(image_path: Path) -> str:
-    """Uses Tesseract to extract raw text, supporting English and Arabic."""
-    try:
-        img = Image.open(image_path)
-        # Using both Arabic and English. Tesseract will attempt to detect both.
-        text = pytesseract.image_to_string(img, lang='ara+eng')
-        return text
-    except Exception as e:
-        logger.error(f"Tesseract extraction failed: {e}")
-        raise
-
-def structure_text_with_llm(raw_text: str) -> str:
-    """Uses the LLM to extract only tables and relevant financial notes."""
-    system_prompt = (
-    "You are a specialized financial data extraction agent. "
-    "Your goal is to extract ONLY financial tables and their associated footnotes. "
-    "\n\nSTRICT FORMATTING RULES:\n"
-    "1. NO MARKDOWN BLOCKS: Do not wrap your response in ```markdown or ``` tags. Output RAW text only.\n"
-    "2. TABLES: Reconstruct all financial grids into clean Markdown tables.\n"
-    "3. LINKED NOTES: Identify reference markers (e.g., '(1)', '*') and extract their definitions below the table.\n"
-    "4. EXCLUSIONS: Do not include 'Notes:' headers if no notes exist. Do not include page numbers or metadata.\n"
-    "5. NO HALLUCINATION: If a value is unreadable, use '---'. Never guess figures."
-)
+# --- NEW: Chandra Processing Function ---
+def process_with_chandra(image_path: Path) -> str:
+    """Uses Chandra OCR 2 via vLLM to extract structured markdown."""
+    out_dir = image_path.parent / f"{image_path.stem}_chandra"
+    out_dir.mkdir(parents=True, exist_ok=True)
     
-    response = requests.post(
-        TEXT_URL,
-        json={
-            "model": "/models/text",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Extract tables and notes from this text:\n\n{raw_text}"}
-            ],
-            "temperature": 0.0, # Set to 0 for maximum extraction accuracy
-        },
-        timeout=120,
-    )
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    # Route Chandra to the vLLM container
+    env = os.environ.copy()
+    env["VLLM_API_BASE"] = os.getenv("VLLM_API_BASE", "http://text-engine:8001/v1")
+    env["VLLM_MODEL_NAME"] = os.getenv("VLLM_MODEL_NAME", "chandra")
+    
+    cmd = [
+        "chandra", 
+        str(image_path), 
+        str(out_dir), 
+        "--method", "vllm"
+    ]
+    
+    try:
+        subprocess.run(cmd, env=env, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Chandra OCR failed: {e.stderr}")
+        raise RuntimeError(f"Chandra extraction failed: {e.stderr}")
+        
+    # Find the generated markdown file
+    md_files = list(out_dir.rglob("*.md"))
+    if not md_files:
+        raise FileNotFoundError("Chandra OCR did not produce a markdown file.")
+    
+    target_md = next((f for f in md_files if image_path.stem in f.name), md_files[0])
+    return target_md.read_text(encoding="utf-8")
+
 
 def filter_tables_and_notes(text: str) -> str:
     """
-    Cleans the LLM output to ensure only the Markdown content is passed to Excel.
+    Cleans the output to ensure only the Markdown content is passed to Excel.
     This version is more permissive to capture notes that don't start with digits.
     """
     if not text:
@@ -167,17 +159,21 @@ def worker_loop() -> None:
         try:
             image_path = UPLOAD_DIR / filename
             
-            raw_text = process_image_with_tesseract(image_path)
+            # 1. End-to-End Extraction
+            md_text = process_with_chandra(image_path)
             
-            corrected_text = structure_text_with_llm(raw_text)
+            # 2. Filter for Excel export
+            filtered_text = filter_tables_and_notes(md_text)
             
-            filtered_text = filter_tables_and_notes(corrected_text)
-
-            image_path.with_name(f"{image_path.stem}_raw.md").write_text(raw_text, encoding="utf-8")
-            image_path.with_suffix(".md").write_text(corrected_text, encoding="utf-8")
+            # 3. Save artifacts
+            raw_placeholder = "N/A - Direct to Markdown via Chandra 2 End-to-End Vision Model."
+            image_path.with_name(f"{image_path.stem}_raw.md").write_text(raw_placeholder, encoding="utf-8")
+            image_path.with_suffix(".md").write_text(md_text, encoding="utf-8")
             save_markdown_to_excel(filtered_text, image_path.with_suffix(".xlsx"))
-
-            update_job(job_id, JobStatus.COMPLETED, raw_text, corrected_text)
+            
+            # Update job (Using the placeholder for raw_text to not break the UI's diff viewer)
+            update_job(job_id, JobStatus.COMPLETED, raw_placeholder, md_text)
+            
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}")
             update_job(job_id, f"{JobStatus.FAILED}: {str(e)}")
@@ -223,7 +219,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
 def markdown_to_json(md_text: str) -> dict:
     """Parses a Markdown table and notes into a structured JSON dictionary."""
     if not md_text:
-        return {"table": [], "notes": []} # Changed default to empty list
+        return {"table": [], "notes": []} 
         
     lines = md_text.splitlines()
     table_data = []
@@ -274,7 +270,7 @@ def markdown_to_json(md_text: str) -> dict:
                 
     return {
         "table": table_data,
-        "notes": notes  # Now returning the list directly
+        "notes": notes 
     }
     
 
