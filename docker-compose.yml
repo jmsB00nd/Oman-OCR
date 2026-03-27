@@ -16,9 +16,10 @@ services:
   text-engine:
     image: vllm/vllm-openai:latest
     container_name: ocr-text-engine
-    # Updated to use 'serve' positional argument and JSON for multi-modal limits
+    # Reverting to explicit flags to satisfy the entrypoint parser
     command: >
-      serve /models/text
+      serve
+      --model /models/text
       --served-model-name chandra
       --gpu-memory-utilization 0.90
       --port 8001
@@ -27,7 +28,6 @@ services:
       --limit-mm-per-prompt '{"image":1}'
     volumes:
       - ./models/text:/models/text:ro
-    # vLLM/PyTorch requires shared memory to avoid bus errors
     shm_size: '2gb'
     deploy:
       resources:
@@ -42,7 +42,6 @@ services:
       - ocr-network
     restart: unless-stopped
     healthcheck:
-      # Adjusted to point to the correct v1/models endpoint for a more reliable check
       test: ["CMD", "curl", "-f", "http://localhost:8001/v1/models"]
       interval: 30s
       timeout: 10s
