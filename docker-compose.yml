@@ -21,7 +21,7 @@ services:
       --port 8001
       --max-model-len 8192
       --trust-remote-code
-      --limit-mm-per-prompt image=1
+      --limit-mm-per-prompt '{"image": 1}'
     volumes:
       - ./models/text:/models/text:ro
     deploy:
