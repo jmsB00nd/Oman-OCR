@@ -55,7 +55,6 @@ app.add_middleware(
 app.mount("/images", StaticFiles(directory=UPLOAD_DIR), name="images")
 
 
-# --- NEW: Chandra Processing Function ---
 def process_with_chandra(image_path: Path) -> str:
     """Uses Chandra OCR 2 via vLLM to extract structured markdown."""
     out_dir = image_path.parent / f"{image_path.stem}_chandra"
@@ -66,11 +65,13 @@ def process_with_chandra(image_path: Path) -> str:
     env["VLLM_API_BASE"] = os.getenv("VLLM_API_BASE", "http://text-engine:8001/v1")
     env["VLLM_MODEL_NAME"] = os.getenv("VLLM_MODEL_NAME", "chandra")
     
+    # ADD THE --max-output-tokens FLAG HERE
     cmd = [
         "chandra", 
         str(image_path), 
         str(out_dir), 
-        "--method", "vllm"
+        "--method", "vllm",
+        "--max-output-tokens", "4096"  # <--- Limit requested tokens to fit in VRAM
     ]
     
     try:
