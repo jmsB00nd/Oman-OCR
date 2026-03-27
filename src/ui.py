@@ -221,7 +221,7 @@ def render_results_section(jobs: list) -> None:
                     m2.metric("Words", len(raw_text.split()))
                     m3.metric("Lines", len(raw_text.splitlines()))
                     
-                with st.container(height=400): st.markdown(raw_text)
+                with st.container(height=400): st.markdown(raw_text, unsafe_allow_html=True)
                 
                 # Existing Raw Download Button
                 st.download_button(
@@ -258,7 +258,7 @@ def render_results_section(jobs: list) -> None:
             with tab_corrected:
                 st.markdown(f'<div style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:0.5rem 1rem;border-radius:20px;display:inline-block;margin-bottom:1rem;font-weight:600;">{t("ai_powered")}</div>', unsafe_allow_html=True)
                 if corrected_text:
-                    with st.container(height=400): st.markdown(corrected_text)
+                    with st.container(height=400): st.markdown(corrected_text, unsafe_allow_html=True)
                     st.download_button(t("download_text"), data=corrected_text, file_name=f"{Path(job['filename']).stem}_structured.txt", key=f"dl_corr_{job['id']}", use_container_width=True)
                 else:
                     st.warning(t("no_corrected"))
