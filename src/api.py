@@ -10,7 +10,7 @@ import threading
 import time
 from pathlib import Path
 from typing import List
-
+from bs4 import BeautifulSoup
 import pandas as pd
 import requests
 from PIL import Image
@@ -112,34 +112,60 @@ def filter_tables_and_notes(text: str) -> str:
     return '\n'.join(filtered_lines).strip()
 
 def save_markdown_to_excel(md_text: str, excel_path: Path) -> None:
-    lines = md_text.splitlines()
+    """Extracts HTML tables and notes to an Excel file."""
+    if not md_text:
+        return
+        
+    soup = BeautifulSoup(md_text, "html.parser")
     table_data = []
-    notes = []
     
-    for line in lines:
-        stripped = line.strip()
-        if not stripped: continue
-        if stripped.startswith('|'):
-            if re.match(r'^\|[\-\s\|]+\|$', stripped) or re.match(r'^\|[\-\s\|]+$', stripped):
-                continue
-            row_vals = [col.strip() for col in stripped.split('|')]
-            row_vals = row_vals[1:-1] if stripped.endswith('|') else row_vals[1:]
-            table_data.append(row_vals)
-        else:
-            notes.append(stripped)
+    # 1. Extract HTML Tables
+    table_tags = soup.find_all("table")
+    if table_tags:
+        table = table_tags[0]
+        
+        for br in table.find_all("br"):
+            br.replace_with(" ")
             
+        for row in table.find_all("tr"):
+            cells = row.find_all(["th", "td"])
+            row_vals = [cell.get_text(strip=True) for cell in cells]
+            if row_vals:
+                table_data.append(row_vals)
+                
+        for t in table_tags:
+            t.decompose()
+            
+    # 2. Extract Notes
+    notes = []
+    raw_text = soup.get_text(separator="\n")
+    for line in raw_text.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("```"):
+            notes.append(stripped)
+
+    # 3. Save to Excel using Pandas
     try:
-        with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+        with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
             if table_data:
+                # Calculate max columns to handle rows with colspans (like "ASSETS")
+                max_cols = max(len(r) for r in table_data)
                 headers = table_data[0]
+                
+                # Pad headers if necessary
+                if len(headers) < max_cols:
+                    headers.extend([f"Column_{i+1}" for i in range(len(headers), max_cols)])
+                    
+                # Pad data rows
                 rows = []
                 for r in table_data[1:]:
-                    if len(r) < len(headers): r.extend([''] * (len(headers) - len(r)))
-                    elif len(r) > len(headers): r = r[:len(headers)]
+                    r.extend([""] * (max_cols - len(r)))
                     rows.append(r)
-                pd.DataFrame(rows, columns=headers).to_excel(writer, sheet_name='Table', index=False)
+                    
+                pd.DataFrame(rows, columns=headers).to_excel(writer, sheet_name="Table", index=False)
+                
             if notes:
-                pd.DataFrame(notes, columns=["Notes"]).to_excel(writer, sheet_name='Notes', index=False)
+                pd.DataFrame(notes, columns=["Notes"]).to_excel(writer, sheet_name="Notes", index=False)
     except Exception as e:
         logger.error(f"Failed to generate Excel: {e}")
 
@@ -163,16 +189,15 @@ def worker_loop() -> None:
             # 1. End-to-End Extraction
             md_text = process_with_chandra(image_path)
             
-            # 2. Filter for Excel export
-            filtered_text = filter_tables_and_notes(md_text)
-            
-            # 3. Save artifacts
+            # 2. Save artifacts (Pass md_text directly now)
             raw_placeholder = "N/A - Direct to Markdown via Chandra 2 End-to-End Vision Model."
             image_path.with_name(f"{image_path.stem}_raw.md").write_text(raw_placeholder, encoding="utf-8")
             image_path.with_suffix(".md").write_text(md_text, encoding="utf-8")
-            save_markdown_to_excel(filtered_text, image_path.with_suffix(".xlsx"))
             
-            # Update job (Using the placeholder for raw_text to not break the UI's diff viewer)
+            # Use the new BeautifulSoup-powered function
+            save_markdown_to_excel(md_text, image_path.with_suffix(".xlsx"))
+            
+            # Update job
             update_job(job_id, JobStatus.COMPLETED, raw_placeholder, md_text)
             
         except Exception as e:
@@ -218,57 +243,66 @@ async def upload_files(files: List[UploadFile] = File(...)):
     return {"queued": queued}
 
 def markdown_to_json(md_text: str) -> dict:
-    """Parses a Markdown table and notes into a structured JSON dictionary."""
+    """Parses an HTML table and notes from Chandra OCR into a JSON dictionary."""
     if not md_text:
         return {"table": [], "notes": []} 
         
-    lines = md_text.splitlines()
+    soup = BeautifulSoup(md_text, "html.parser")
     table_data = []
-    notes = []
     headers = []
     
-    for line in lines:
-        stripped = line.strip()
-        if not stripped: 
-            continue
+    # 1. Parse HTML Tables
+    table_tags = soup.find_all("table")
+    if table_tags:
+        table = table_tags[0] # Grab the primary table
+        
+        # Convert <br/> tags to spaces for cleaner keys/values
+        for br in table.find_all("br"):
+            br.replace_with(" ")
             
-        if stripped.startswith('|'):
-            # Skip Markdown separator lines like |---|---|
-            if re.match(r'^\|[\-\s\|]+\|$', stripped) or re.match(r'^\|[\-\s\|]+$', stripped):
+        for row in table.find_all("tr"):
+            # Extract both headers and standard cells
+            cells = row.find_all(["th", "td"])
+            row_vals = [cell.get_text(strip=True) for cell in cells]
+            
+            if not row_vals:
                 continue
                 
-            # Extract row values
-            row_vals = [col.strip() for col in stripped.split('|')]
-            row_vals = row_vals[1:-1] if stripped.endswith('|') else row_vals[1:]
-            
-            if not headers:
-                # First valid row becomes our dictionary keys
+            if not headers and row.find("th"):
+                headers = row_vals
+            elif not headers: # Fallback if Chandra doesn't use <th>
                 headers = row_vals
             else:
-                # Map row values to the header keys
                 row_dict = {}
                 for i, val in enumerate(row_vals):
                     key = headers[i] if i < len(headers) else f"Column_{i+1}"
                     row_dict[key] = val
                 table_data.append(row_dict)
-        else:
-            # Clean up and normalize notes
-            cleaned_note = stripped
-            
-            # Skip standalone header lines like "### Notes:" or "Notes:"
-            if re.match(r'^#+\s*Notes?:?\s*$', cleaned_note, re.IGNORECASE) or cleaned_note.lower() in ['notes:', 'notes']:
-                continue
                 
-            # Remove leading bullet points (- or *)
-            cleaned_note = re.sub(r'^[-*]\s+', '', cleaned_note)
+        # Remove the table from the soup so we can easily extract the notes
+        for t in table_tags:
+            t.decompose()
             
-            # Remove markdown bolding formatting (e.g., **Note 1** -> Note 1)
-            cleaned_note = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned_note)
+    # 2. Parse Remaining Text as Notes
+    notes = []
+    raw_text = soup.get_text(separator="\n")
+    
+    for line in raw_text.splitlines():
+        stripped = line.strip()
+        if not stripped: 
+            continue
             
-            # Add to the list if the line isn't empty after cleaning
-            if cleaned_note:
-                notes.append(cleaned_note)
-                
+        # Skip standalone header lines
+        if re.match(r'^#+\s*Notes?:?\s*$', stripped, re.IGNORECASE) or stripped.lower() in ['notes:', 'notes']:
+            continue
+            
+        # Clean up Markdown formatting
+        cleaned = re.sub(r'^[-*]\s+', '', stripped)
+        cleaned = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned)
+        
+        if cleaned:
+            notes.append(cleaned)
+            
     return {
         "table": table_data,
         "notes": notes 
