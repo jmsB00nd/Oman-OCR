@@ -161,23 +161,26 @@ def filter_markdown_to_structured_data(md_text: str) -> str:
         return "" 
         
     table = table_tags[0]
-    valid_markers = set()
     
+    # 1. SAVE the table HTML immediately before we modify or destroy anything
+    table_html = str(table)
+    
+    valid_markers = set()
     # Matches patterns like (1), [1], (a), [a]
     marker_pattern = re.compile(r'(\(\w+\)|\[\w+\])') 
     
-    # 1. Extract valid note markers directly from the table cells
+    # 2. Extract valid note markers directly from the table cells
     for cell in table.find_all(["th", "td"]):
         valid_markers.update(marker_pattern.findall(cell.get_text()))
         
-    # 2. Remove the table from the soup so we can process the remaining text
+    # 3. Remove the table from the soup so we can process the remaining text safely
     for t in table_tags:
-        t.decompose() 
+        t.extract() # extract() removes it from the tree safely
         
     valid_notes = []
     raw_text = soup.get_text(separator="\n")
     
-    # 3. Extract matching notes from the rest of the document
+    # 4. Extract matching notes from the rest of the document
     for line in raw_text.splitlines():
         stripped = line.strip()
         
@@ -186,10 +189,12 @@ def filter_markdown_to_structured_data(md_text: str) -> str:
         
         # A note is valid ONLY if it starts with a marker found in the table
         if clean_line and any(clean_line.startswith(marker) for marker in valid_markers):
-            valid_notes.append(stripped) # Append the original stripped line
+            valid_notes.append(stripped)
             
-    # 4. Reconstruct clean output (HTML format handles tables/text flawlessly in Streamlit)
-    output_html = [str(table)]
+    # 5. Reconstruct clean output starting with the safely saved table HTML
+    output_html = [table_html]
+    
+    # Only append the notes div if we actually found referenced notes
     if valid_notes:
         notes_html = "".join([f"<p>{n}</p>" for n in valid_notes])
         output_html.append(f"<div style='margin-top: 15px;'>{notes_html}</div>")
