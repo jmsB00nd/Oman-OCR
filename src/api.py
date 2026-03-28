@@ -225,15 +225,14 @@ def worker_loop() -> None:
             filtered_md = filter_markdown_to_structured_data(raw_md)
             
             # 3. Save artifacts using the filtered text
-            raw_placeholder = "N/A - Direct to Markdown via Chandra 2 End-to-End Vision Model."
-            image_path.with_name(f"{image_path.stem}_raw.md").write_text(raw_placeholder, encoding="utf-8")
+            image_path.with_name(f"{image_path.stem}_raw.md").write_text(filtered_md, encoding="utf-8")
             image_path.with_suffix(".md").write_text(filtered_md, encoding="utf-8")
             
             # Use the existing BeautifulSoup-powered function
             save_markdown_to_excel(filtered_md, image_path.with_suffix(".xlsx"))
             
             # Update job with the newly filtered data
-            update_job(job_id, JobStatus.COMPLETED, raw_placeholder, filtered_md)
+            update_job(job_id, JobStatus.COMPLETED, filtered_md, filtered_md)
             
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}")
