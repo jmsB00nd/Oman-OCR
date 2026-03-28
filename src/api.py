@@ -89,27 +89,6 @@ def process_with_chandra(image_path: Path) -> str:
     return target_md.read_text(encoding="utf-8")
 
 
-def filter_tables_and_notes(text: str) -> str:
-    """
-    Cleans the output to ensure only the Markdown content is passed to Excel.
-    This version is more permissive to capture notes that don't start with digits.
-    """
-    if not text:
-        return ""
-        
-    lines = text.splitlines()
-    filtered_lines = []
-    
-    for line in lines:
-        stripped = line.strip()
-        # Keep table rows
-        if stripped.startswith('|'):
-            filtered_lines.append(line)
-        # Keep non-empty lines that aren't markdown artifacts (like ``` or headers)
-        elif stripped and not stripped.startswith('#') and not stripped.startswith('```'):
-            filtered_lines.append(line)
-            
-    return '\n'.join(filtered_lines).strip()
 
 def save_markdown_to_excel(md_text: str, excel_path: Path) -> None:
     """Extracts HTML tables and notes to an Excel file."""
