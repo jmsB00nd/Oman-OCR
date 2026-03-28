@@ -147,6 +147,54 @@ def save_markdown_to_excel(md_text: str, excel_path: Path) -> None:
                 pd.DataFrame(notes, columns=["Notes"]).to_excel(writer, sheet_name="Notes", index=False)
     except Exception as e:
         logger.error(f"Failed to generate Excel: {e}")
+    
+def filter_markdown_to_structured_data(md_text: str) -> str:
+    """Filters Markdown to ONLY include the table and notes specifically referenced within it."""
+    if not md_text:
+        return ""
+        
+    soup = BeautifulSoup(md_text, "html.parser")
+    table_tags = soup.find_all("table")
+    
+    # If there is no table, return empty string to enforce "nothing else" is displayed
+    if not table_tags:
+        return "" 
+        
+    table = table_tags[0]
+    valid_markers = set()
+    
+    # Matches patterns like (1), [1], (a), [a]
+    marker_pattern = re.compile(r'(\(\w+\)|\[\w+\])') 
+    
+    # 1. Extract valid note markers directly from the table cells
+    for cell in table.find_all(["th", "td"]):
+        valid_markers.update(marker_pattern.findall(cell.get_text()))
+        
+    # 2. Remove the table from the soup so we can process the remaining text
+    for t in table_tags:
+        t.decompose() 
+        
+    valid_notes = []
+    raw_text = soup.get_text(separator="\n")
+    
+    # 3. Extract matching notes from the rest of the document
+    for line in raw_text.splitlines():
+        stripped = line.strip()
+        
+        # Strip potential "Note:" prefixes just in case the OCR added them
+        clean_line = re.sub(r'^(Notes?:?\s*)', '', stripped, flags=re.IGNORECASE).strip()
+        
+        # A note is valid ONLY if it starts with a marker found in the table
+        if clean_line and any(clean_line.startswith(marker) for marker in valid_markers):
+            valid_notes.append(stripped) # Append the original stripped line
+            
+    # 4. Reconstruct clean output (HTML format handles tables/text flawlessly in Streamlit)
+    output_html = [str(table)]
+    if valid_notes:
+        notes_html = "".join([f"<p>{n}</p>" for n in valid_notes])
+        output_html.append(f"<div style='margin-top: 15px;'>{notes_html}</div>")
+        
+    return "\n".join(output_html)
 
 
 # --- Background Worker ---
@@ -166,18 +214,21 @@ def worker_loop() -> None:
             image_path = UPLOAD_DIR / filename
             
             # 1. End-to-End Extraction
-            md_text = process_with_chandra(image_path)
+            raw_md = process_with_chandra(image_path)
             
-            # 2. Save artifacts (Pass md_text directly now)
+            # 2. FILTER the text strictly to the table and referenced notes
+            filtered_md = filter_markdown_to_structured_data(raw_md)
+            
+            # 3. Save artifacts using the filtered text
             raw_placeholder = "N/A - Direct to Markdown via Chandra 2 End-to-End Vision Model."
             image_path.with_name(f"{image_path.stem}_raw.md").write_text(raw_placeholder, encoding="utf-8")
-            image_path.with_suffix(".md").write_text(md_text, encoding="utf-8")
+            image_path.with_suffix(".md").write_text(filtered_md, encoding="utf-8")
             
-            # Use the new BeautifulSoup-powered function
-            save_markdown_to_excel(md_text, image_path.with_suffix(".xlsx"))
+            # Use the existing BeautifulSoup-powered function
+            save_markdown_to_excel(filtered_md, image_path.with_suffix(".xlsx"))
             
-            # Update job
-            update_job(job_id, JobStatus.COMPLETED, raw_placeholder, md_text)
+            # Update job with the newly filtered data
+            update_job(job_id, JobStatus.COMPLETED, raw_placeholder, filtered_md)
             
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}")
