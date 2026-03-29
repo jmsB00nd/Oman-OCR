@@ -302,13 +302,24 @@ def markdown_to_json(md_text: str) -> dict:
             if not row_vals:
                 continue
                 
-            if not headers and row.find("th"):
-                headers = row_vals
-            elif not headers: # Fallback if Chandra doesn't use <th>
-                headers = row_vals
+            # Set headers on the first valid row
+            if not headers:
+                seen_headers = {}
+                for i, val in enumerate(row_vals):
+                    # FIX 1: Replace empty strings with a default column name
+                    base_name = val if val else f"Column_{i+1}"
+                    
+                    # FIX 2: Handle duplicate column names (like multiple "Change" columns)
+                    if base_name in seen_headers:
+                        seen_headers[base_name] += 1
+                        headers.append(f"{base_name}_{seen_headers[base_name]}")
+                    else:
+                        seen_headers[base_name] = 0
+                        headers.append(base_name)
             else:
                 row_dict = {}
                 for i, val in enumerate(row_vals):
+                    # Fallback in case a data row has more columns than the header row
                     key = headers[i] if i < len(headers) else f"Column_{i+1}"
                     row_dict[key] = val
                 table_data.append(row_dict)
