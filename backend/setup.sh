@@ -1,11 +1,9 @@
 #!/bin/bash
 # Setup script for Arabic OCR System (Backend)
-# This script should now reside in the /backend/ folder
 
 set -e
 
 # Automatically move to the directory where this script is located
-# This ensures paths like 'scripts/' work even if called from the root
 cd "$(dirname "$0")"
 
 echo "=================================================="
@@ -23,6 +21,7 @@ fi
 # Install Python dependencies for model download 
 echo "Installing dependencies..."
 python3 -m pip install -q --upgrade pip
+# Ensure huggingface-hub is explicitly available for the download script
 python3 -m pip install -q -r scripts/requirements.txt 
 
 # Download models 
@@ -34,12 +33,13 @@ python3 scripts/download_models.py
 if [ ! -f .env ]; then
     echo ""
     echo "Creating .env file from template..."
-    # Assuming .env.example was also moved to the backend folder
     if [ -f .env.example ]; then
         cp .env.example .env 
     else
+        # If no template exists, we create one with the necessary HF_TOKEN field
         touch .env
-        echo "WARNING: .env.example not found. Created an empty .env file."
+        echo "HF_TOKEN=" >> .env
+        echo "WARNING: .env.example not found. Created .env with HF_TOKEN placeholder."
     fi
 fi
 
@@ -54,12 +54,10 @@ echo "   Backend Setup Complete!"
 echo "=================================================="
 echo ""
 echo "Next steps:"
-echo "  1. Go to the project root directory:"
+echo "  1. If you haven't yet, add your Hugging Face token to the .env file."
+echo "  2. Go to the project root directory:"
 echo "     cd .."
 echo ""
-echo "  2. Start all services (Backend + Next.js):"
+echo "  3. Start all services:"
 echo "     docker-compose up -d"
-echo ""
-echo "  3. Access the Next.js UI:"
-echo "     http://localhost:3000"
 echo ""

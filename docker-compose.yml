@@ -17,11 +17,10 @@ services:
     command: >
       /models/text
       --served-model-name chandra
-      --gpu-memory-utilization 0.90
+      --gpu-memory-utilization 0.55
       --port 8001
-      --max-model-len 16384
+      --max-model-len 8192
       --trust-remote-code
-      --limit-mm-per-prompt '{"image": 1}'
     volumes:
       - ./backend/models/text:/models/text:ro
     deploy:
@@ -39,8 +38,36 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
-      timeout: 10s
-      retries: 3
+      start_period: 180s
+
+  # --- Gemma 3 LLM Service (New) ---
+  llm-engine:
+    image: vllm/vllm-openai:latest
+    container_name: ocr-llm-engine
+    command: >
+      /models/llm
+      --served-model-name gemma
+      --gpu-memory-utilization 0.35
+      --port 8003
+      --max-model-len 8192
+      --trust-remote-code
+    volumes:
+      - ./backend/models/llm:/models/llm:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports:
+      - "8003:8003"
+    networks:
+      - ocr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
       start_period: 180s
 
   # --- FastAPI Backend Core ---
@@ -53,9 +80,10 @@ services:
     env_file:
       - ./backend/.env        
     environment:
-      - TEXT_URL=http://text-engine:8001/v1/chat/completions
-      - VLLM_API_BASE=http://text-engine:8001/v1
+      - TEXT_URL=http://text-engine:8001/v1
+      - LLM_URL=http://llm-engine:8003/v1
       - VLLM_MODEL_NAME=chandra
+      - GEMMA_MODEL_NAME=gemma
       - DB_PATH=/app/data/jobs.db
       - UPLOAD_DIR=/app/data/uploads
     volumes:
@@ -67,9 +95,11 @@ services:
     depends_on:
       text-engine:
         condition: service_healthy
+      llm-engine:
+        condition: service_healthy
     restart: unless-stopped
 
-  # --- Streamlit Frontend UI (Existing) ---
+  # --- Streamlit Frontend UI ---
   streamlit-ui:
     build:
       context: ./backend        
