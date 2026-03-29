@@ -89,6 +89,47 @@ def process_with_chandra(image_path: Path) -> str:
     target_md = next((f for f in md_files if image_path.stem in f.name), md_files[0])
     return target_md.read_text(encoding="utf-8")
 
+def process_with_llm(text: str) -> str:
+    """Sends the filtered Markdown to the Gemma LLM for structural correction."""
+    if not text:
+        return ""
+        
+    llm_url = os.getenv("LLM_URL", "http://llm-engine:8003/v1")
+    model_name = os.getenv("GEMMA_MODEL_NAME", "gemma")
+    
+    system_prompt = """You are a structure and quality corrector. Your responsibilities are:
+1. Fix spelling and minor textual errors.
+2. Validate and correct table structures, ensuring:
+   - Proper column alignment
+   - Consistent number of columns per row
+   - Correct use of colspan and rowspan
+   - Logical placement of section headers (e.g., if a header spans all columns but belongs in a specific label column, move it to the correct column and pad the row with empty <td> tags).
+
+Constraints:
+- Do not hallucinate or invent missing data.
+- Do not remove any rows or values.
+- Only fix formatting, alignment, and textual correctness.
+- Maintain the original semantic structure of the document."""
+
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Please correct the following table data:\n\n{text}"}
+        ],
+        "temperature": 0.1,  
+        "max_tokens": 8192
+    }
+    
+    try:
+        response = requests.post(f"{llm_url}/chat/completions", headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        logger.error(f"LLM post-processing failed: {e}")
+        return text  
+
 
 
 def save_markdown_to_excel(md_text: str, excel_path: Path) -> None:
@@ -225,15 +266,19 @@ def worker_loop() -> None:
             # 2. FILTER the text strictly to the table and referenced notes
             filtered_md = filter_markdown_to_structured_data(raw_md)
             
-            # 3. Save artifacts using the filtered text
+            # 3. Apply LLM Post-Processing (NEW STEP)
+            corrected_md = process_with_llm(filtered_md)
+            
+            # 4. Save artifacts 
+            # Note: We save filtered_md as raw, and corrected_md as the final output
             image_path.with_name(f"{image_path.stem}_raw.md").write_text(filtered_md, encoding="utf-8")
-            image_path.with_suffix(".md").write_text(filtered_md, encoding="utf-8")
+            image_path.with_suffix(".md").write_text(corrected_md, encoding="utf-8")
             
-            # Use the existing BeautifulSoup-powered function
-            save_markdown_to_excel(filtered_md, image_path.with_suffix(".xlsx"))
+            # Pass the corrected markdown to the Excel generator
+            save_markdown_to_excel(corrected_md, image_path.with_suffix(".xlsx"))
             
-            # Update job with the newly filtered data
-            update_job(job_id, JobStatus.COMPLETED, filtered_md, filtered_md)
+            # Update job in DB (raw_text = filtered_md, corrected_text = corrected_md)
+            update_job(job_id, JobStatus.COMPLETED, filtered_md, corrected_md)
             
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}")
