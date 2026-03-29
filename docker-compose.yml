@@ -2,11 +2,11 @@ services:
   # --- Model Downloader Service ---
   model-downloader:
     build:
-      context: ./scripts
+      context: ./backend/scripts  
       dockerfile: Dockerfile.downloader
     container_name: ocr-model-downloader
     volumes:
-      - ./models:/app/models
+      - ./backend/models:/app/models 
     profiles:
       - setup
 
@@ -23,7 +23,7 @@ services:
       --trust-remote-code
       --limit-mm-per-prompt '{"image": 1}'
     volumes:
-      - ./models/text:/models/text:ro
+      - ./backend/models/text:/models/text:ro
     deploy:
       resources:
         reservations:
@@ -32,7 +32,7 @@ services:
               count: 1
               capabilities: [gpu]
     ports:
-      - "8001:8001" # Text Engine Port
+      - "8001:8001"
     networks:
       - ocr-network
     restart: unless-stopped
@@ -46,22 +46,22 @@ services:
   # --- FastAPI Backend Core ---
   backend:
     build:
-      context: .
+      context: ./backend      
       dockerfile: Dockerfile
     container_name: ocr-backend
     command: uvicorn api:app --host 0.0.0.0 --port 8002
     env_file:
-      - .env
+      - ./backend/.env        
     environment:
       - TEXT_URL=http://text-engine:8001/v1/chat/completions
       - VLLM_API_BASE=http://text-engine:8001/v1
       - VLLM_MODEL_NAME=chandra
-      - DB_PATH=/data/jobs.db
-      - UPLOAD_DIR=/data/uploads
+      - DB_PATH=/app/data/jobs.db
+      - UPLOAD_DIR=/app/data/uploads
     volumes:
-      - ./data:/data
+      - ./backend/data:/app/data 
     ports:
-      - "8002:8002" # API Port mapped out for UI
+      - "8002:8002"
     networks:
       - ocr-network
     depends_on:
@@ -69,18 +69,17 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # --- Streamlit Frontend UI ---
-  frontend:
+  # --- Streamlit Frontend UI (Existing) ---
+  streamlit-ui:
     build:
-      context: .
+      context: ./backend        
       dockerfile: Dockerfile
-    container_name: ocr-frontend
+    container_name: ocr-streamlit
     command: streamlit run ui.py --server.port=8501 --server.address=0.0.0.0
     environment:
-      # Connects Streamlit to the backend container
       - API_URL=http://backend:8002 
     ports:
-      - "8080:8501" # Access on browser via 8080
+      - "8080:8501"
     networks:
       - ocr-network
     depends_on:
@@ -93,5 +92,5 @@ networks:
     driver: bridge
 
 volumes:
-  data:
-    name: ocr-data
+  ocr-data: 
+    driver: local
