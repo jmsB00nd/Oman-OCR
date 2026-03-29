@@ -276,88 +276,13 @@ async def upload_files(files: List[UploadFile] = File(...)):
             
     return {"queued": queued}
 
-def markdown_to_json(md_text: str) -> dict:
-    """Parses an HTML table and notes from Chandra OCR into a JSON dictionary."""
-    if not md_text:
-        return {"table": [], "notes": []} 
-        
-    soup = BeautifulSoup(md_text, "html.parser")
-    table_data = []
-    headers = []
-    
-    # 1. Parse HTML Tables
-    table_tags = soup.find_all("table")
-    if table_tags:
-        table = table_tags[0] # Grab the primary table
-        
-        # Convert <br/> tags to spaces for cleaner keys/values
-        for br in table.find_all("br"):
-            br.replace_with(" ")
-            
-        for row in table.find_all("tr"):
-            # Extract both headers and standard cells
-            cells = row.find_all(["th", "td"])
-            row_vals = [cell.get_text(strip=True) for cell in cells]
-            
-            if not row_vals:
-                continue
-                
-            # Set headers on the first valid row
-            if not headers:
-                seen_headers = {}
-                for i, val in enumerate(row_vals):
-                    # FIX 1: Replace empty strings with a default column name
-                    base_name = val if val else f"Column_{i+1}"
-                    
-                    # FIX 2: Handle duplicate column names (like multiple "Change" columns)
-                    if base_name in seen_headers:
-                        seen_headers[base_name] += 1
-                        headers.append(f"{base_name}_{seen_headers[base_name]}")
-                    else:
-                        seen_headers[base_name] = 0
-                        headers.append(base_name)
-            else:
-                row_dict = {}
-                for i, val in enumerate(row_vals):
-                    # Fallback in case a data row has more columns than the header row
-                    key = headers[i] if i < len(headers) else f"Column_{i+1}"
-                    row_dict[key] = val
-                table_data.append(row_dict)
-                
-        # Remove the table from the soup so we can easily extract the notes
-        for t in table_tags:
-            t.decompose()
-            
-    # 2. Parse Remaining Text as Notes
-    notes = []
-    raw_text = soup.get_text(separator="\n")
-    
-    for line in raw_text.splitlines():
-        stripped = line.strip()
-        if not stripped: 
-            continue
-            
-        # Skip standalone header lines
-        if re.match(r'^#+\s*Notes?:?\s*$', stripped, re.IGNORECASE) or stripped.lower() in ['notes:', 'notes']:
-            continue
-            
-        # Clean up Markdown formatting
-        cleaned = re.sub(r'^[-*]\s+', '', stripped)
-        cleaned = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned)
-        
-        if cleaned:
-            notes.append(cleaned)
-            
-    return {
-        "table": table_data,
-        "notes": notes 
-    }
+
     
 
 @app.get("/jobs/structured")
 def fetch_jobs_structured():
     """
-    Returns jobs formatted as structured JSON arrays instead of Markdown strings,
+    Returns jobs formatted with the table as HTML code and notes as an array,
     and removes the raw_text from the response. Ideal for external API consumption.
     """
     jobs = []
@@ -392,12 +317,34 @@ def fetch_jobs_structured():
             
         job_dict["metrics"] = metrics
         
-        # 3. Parse the markdown into a JSON structure
-        parsed_data = markdown_to_json(corrected_text)
+        # 3. Extract the HTML table and notes
+        table_html = ""
+        notes = []
         
-        # 4. Replace the markdown string with the JSON array & notes
-        job_dict["corrected_text"] = parsed_data["table"]
-        job_dict["notes"] = parsed_data["notes"]
+        if corrected_text:
+            soup = BeautifulSoup(corrected_text, "html.parser")
+            table_tag = soup.find("table")
+            
+            if table_tag:
+                # Save the table as an HTML string
+                table_html = str(table_tag) 
+                # Remove from soup to isolate the notes
+                table_tag.decompose() 
+                
+            # Parse the remaining text (from the div) as Notes
+            raw_soup_text = soup.get_text(separator="\n")
+            for line in raw_soup_text.splitlines():
+                stripped = line.strip()
+                if not stripped: 
+                    continue
+                # Clean up any potential markdown styling
+                cleaned = re.sub(r'^[-*]\s+', '', stripped)
+                if cleaned:
+                    notes.append(cleaned)
+        
+        # 4. Replace the text with the HTML table code & notes array
+        job_dict["corrected_text"] = table_html
+        job_dict["notes"] = notes
         
         # 5. Remove raw_text from the final dictionary
         job_dict.pop("raw_text", None)
