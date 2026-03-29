@@ -7,7 +7,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Optional
-
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
