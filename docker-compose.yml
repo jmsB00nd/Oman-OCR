@@ -17,7 +17,7 @@ services:
     command: >
       /models/text
       --served-model-name chandra
-      --gpu-memory-utilization 0.70
+      --gpu-memory-utilization 0.58
       --port 8001
       --max-model-len 16384
       --trust-remote-code
@@ -48,7 +48,7 @@ services:
     command: >
       /models/llm
       --served-model-name gemma
-      --gpu-memory-utilization 0.22
+      --gpu-memory-utilization 0.34
       --port 8003
       --max-model-len 2048
       --trust-remote-code
