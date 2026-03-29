@@ -327,7 +327,7 @@ def fetch_jobs_structured():
             
             if table_tag:
                 # Save the table as an HTML string
-                table_html = str(table_tag) 
+                table_html = str(table_tag).replace('\n', '').replace('\r', '')
                 # Remove from soup to isolate the notes
                 table_tag.decompose() 
                 
