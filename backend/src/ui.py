@@ -13,7 +13,7 @@ from PIL import Image
 
 load_dotenv()
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+API_URL = os.getenv("API_URL", "http://backend:8002")
 
 LANGUAGES = {"en": "🇬🇧 English", "ar": "🇸🇦 العربية"}
 TRANSLATIONS = {

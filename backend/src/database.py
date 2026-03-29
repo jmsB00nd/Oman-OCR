@@ -14,7 +14,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.getenv("DB_PATH", "./data/jobs.db")
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB_PATH = os.getenv("DB_PATH", str(BASE_DIR / "data" / "jobs.db"))
 
 
 class JobStatus:

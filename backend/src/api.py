@@ -36,7 +36,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
+BASE_DIR = Path(__file__).resolve().parent.parent
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", str(BASE_DIR / "data" / "uploads")))
 WORKER_POLL_INTERVAL = 2
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
