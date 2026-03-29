@@ -17,10 +17,11 @@ services:
     command: >
       /models/text
       --served-model-name chandra
-      --gpu-memory-utilization 0.55
+      --gpu-memory-utilization 0.70
       --port 8001
-      --max-model-len 8192
+      --max-model-len 16384
       --trust-remote-code
+      --limit-mm-per-prompt '{"image": 1}'
     volumes:
       - ./backend/models/text:/models/text:ro
     deploy:
@@ -47,9 +48,9 @@ services:
     command: >
       /models/llm
       --served-model-name gemma
-      --gpu-memory-utilization 0.35
+      --gpu-memory-utilization 0.22
       --port 8003
-      --max-model-len 8192
+      --max-model-len 2048
       --trust-remote-code
     volumes:
       - ./backend/models/llm:/models/llm:ro
